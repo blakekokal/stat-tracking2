@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -196,7 +195,7 @@ elif st.session_state.page == "approach_distance":
 
     st.session_state.shot = {
         "shot_number": shot_number(),
-        "distance_to_hole": st.number_input("Yards", 0, 400, 50, step=1)
+        "distance_to_hole": st.number_input("Yards", 0, 400, 150, step=1)
     }
 
     c1, c2 = st.columns(2)
@@ -328,7 +327,6 @@ elif st.session_state.page == "summary":
 
     df = pd.DataFrame(rows)
 
-    # SCORE
     total_shots = len(df)
     total_par = sum(h["par"] for h in holes)
     st.subheader("Score")
@@ -345,27 +343,27 @@ elif st.session_state.page == "summary":
     st.write(f"{fw_hit} / {len(fw_holes)} ({fw_hit / len(fw_holes) * 100:.1f}%)")
     st.write(f"Miss Left: {fw_left} • Miss Right: {fw_right}")
 
-    # GREENS IN REGULATION
+    # GIR + PROXIMITY
     gir = 0
     miss_dir = {"left": 0, "right": 0, "short": 0, "long": 0}
-    first_putt_dist = []
-    first_putt_dist_gir = []
-    first_putt_dist_miss = []
+    first_putt = []
+    first_putt_gir = []
+    first_putt_miss = []
 
     for h in holes:
         putts = [s for s in h["shots"] if s.get("putt_distance") is not None]
         if not putts:
             continue
 
-        first_putt = putts[0]
-        first_putt_dist.append(first_putt["putt_distance"])
+        fp = putts[0]
+        first_putt.append(fp["putt_distance"])
 
-        if first_putt["shot_number"] <= h["par"] - 1:
+        if fp["shot_number"] <= h["par"] - 1:
             gir += 1
-            first_putt_dist_gir.append(first_putt["putt_distance"])
+            first_putt_gir.append(fp["putt_distance"])
         else:
-            first_putt_dist_miss.append(first_putt["putt_distance"])
-            prev = h["shots"][first_putt["shot_number"] - 2]
+            first_putt_miss.append(fp["putt_distance"])
+            prev = h["shots"][fp["shot_number"] - 2]
             if prev.get("direction") in miss_dir:
                 miss_dir[prev["direction"]] += 1
 
@@ -377,38 +375,12 @@ elif st.session_state.page == "summary":
         f"{miss_dir['short']} / {miss_dir['long']}"
     )
 
-    # SCRAMBLING
-    scramble_opps = holes_played - gir
-    scramble_made = 0
-
-    for h in holes:
-        putts = [s for s in h["shots"] if s.get("putt_distance") is not None]
-        if not putts:
-            continue
-        first_putt = putts[0]
-        if first_putt["shot_number"] > h["par"] - 1:
-            if any(s.get("result") == "hole" for s in h["shots"]):
-                scramble_made += 1
-
-    st.subheader("Scrambling")
-    if scramble_opps > 0:
-        st.write(f"{scramble_made} / {scramble_opps} ({scramble_made / scramble_opps * 100:.1f}%)")
-    else:
-        st.write("N/A")
-
-    # PUTTING
-    putts = df[df["putt_distance"].notna()]
-    st.subheader("Putting")
-    st.write(f"Total Putts: {len(putts)}")
-    st.write(f"Putts per Hole: {len(putts) / holes_played:.2f}")
-    if gir > 0:
-        st.write(f"Putts per GIR: {len(putts) / gir:.2f}")
-
-    st.write(f"Avg First Putt: {sum(first_putt_dist) / len(first_putt_dist):.1f} ft")
-    if first_putt_dist_gir:
-        st.write(f"Avg First Putt (GIR): {sum(first_putt_dist_gir) / len(first_putt_dist_gir):.1f} ft")
-    if first_putt_dist_miss:
-        st.write(f"Avg First Putt (Missed GIR): {sum(first_putt_dist_miss) / len(first_putt_dist_miss):.1f} ft")
+    st.subheader("Putting & Proximity")
+    st.write(f"Average First Putt: {sum(first_putt) / len(first_putt):.1f} ft")
+    if first_putt_gir:
+        st.write(f"Average Proximity (GIR): {sum(first_putt_gir) / len(first_putt_gir):.1f} ft")
+    if first_putt_miss:
+        st.write(f"Average Proximity (Missed Green): {sum(first_putt_miss) / len(first_putt_miss):.1f} ft")
 
     # EXPORT
     st.subheader("Export Round Data")
