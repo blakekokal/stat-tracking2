@@ -15,16 +15,19 @@ if "hole_index" not in st.session_state:
 if "hole" not in st.session_state:
     st.session_state.hole = {}
 
+if "shot" not in st.session_state:
+    st.session_state.shot = {}
+
 
 # =========================
-# Navigation Helpers
+# Navigation Helper
 # =========================
 def go(page):
     st.session_state.page = page
 
 
 # =========================
-# ROUND SETUP PAGE
+# ROUND SETUP
 # =========================
 if st.session_state.page == "round":
     st.title("Golf Stat Tracker – Round Setup")
@@ -37,7 +40,6 @@ if st.session_state.page == "round":
     st.session_state.round["course_par"] = st.number_input(
         "Course Par", 9, 90, st.session_state.round["holes_played"] * 4
     )
-
     st.session_state.round["holes"] = []
 
     st.button(
@@ -48,49 +50,14 @@ if st.session_state.page == "round":
 
 
 # =========================
-# HOLE SETUP PAGE
+# HOLE SETUP
 # =========================
 elif st.session_state.page == "hole_setup":
     st.title(f"Hole {st.session_state.hole_index} Setup")
 
-    st.session_state.hole["par"] = st.number_input("Hole Par", 3, 5, 4)
-    st.session_state.hole["yardage"] = st.number_input(
-        "Hole Yardage (yards)", 50, 800, 400
-    )
+    st.session_state.hole = {
+        "hole_number": st.session_state.hole_index,
+        "par": st.number_input("Hole Par", 3, 5, 4),
+        "yardage": st.number_input("Hole Yardage (yards)", 50, 800, 400),
+        "shots":
 
-    def start_hole():
-        st.session_state.hole["shots"] = []
-        go("confirm_hole")
-
-    st.button(
-        "Confirm Hole",
-        use_container_width=True,
-        on_click=start_hole
-    )
-
-
-# =========================
-# CONFIRM PAGE (DEBUG)
-# =========================
-elif st.session_state.page == "confirm_hole":
-    st.title("Hole Created ✅")
-
-    st.write("Round:")
-    st.json(st.session_state.round)
-
-    st.write("Current Hole:")
-    st.json(st.session_state.hole)
-
-    st.button(
-        "Proceed to Shots (next step)",
-        use_container_width=True,
-        on_click=lambda: go("done")
-    )
-
-
-# =========================
-# DONE PLACEHOLDER
-# =========================
-elif st.session_state.page == "done":
-    st.title("Step 1 Complete 🎉")
-    st.write("Round and hole setup are working.")
