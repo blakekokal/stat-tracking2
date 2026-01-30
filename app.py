@@ -1,4 +1,6 @@
 import streamlit as st
+import pandas as pd
+from io import BytesIO
 
 # =========================
 # SESSION STATE INIT
@@ -125,7 +127,6 @@ elif st.session_state.page == "shot_result":
     st.caption(progress())
     st.subheader("Tap where the ball finished")
 
-    # HOLE (top)
     st.button("HOLE", use_container_width=True,
               on_click=lambda: (
                   st.session_state.update({"shot": {"shot_number": shot_number(), "result": "hole"}}),
@@ -133,7 +134,6 @@ elif st.session_state.page == "shot_result":
                   finish_hole()
               ))
 
-    # GREEN
     st.markdown("### Green")
     st.button("Green", use_container_width=True,
               on_click=lambda: (
@@ -148,9 +148,7 @@ elif st.session_state.page == "shot_result":
                   go("approach_distance")
               ))
 
-    # FAIRWAY (big fairway on top)
     st.markdown("### Fairway")
-
     st.button("Fairway", use_container_width=True,
               on_click=lambda: (
                   st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway"}}),
@@ -172,14 +170,6 @@ elif st.session_state.page == "shot_result":
                   go("approach_distance")
               ))
 
-    c1, c2, c3 = st.columns([1, 2, 1])
-    c2.button("Fairway Bunker", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway_bunker"}}),
-                  go("shot_direction")
-              ))
-
-    # OTHER
     st.markdown("### Other")
     o1, o2 = st.columns(2)
     o1.button("Water", use_container_width=True,
@@ -313,7 +303,7 @@ elif st.session_state.page == "putt_result":
 
 
 # =========================
-# SUMMARY
+# SUMMARY + EXPORT
 # =========================
 elif st.session_state.page == "summary":
     st.title("Round Stats Recap 📊")
@@ -321,24 +311,55 @@ elif st.session_state.page == "summary":
     holes = st.session_state.round["holes"]
     holes_played = len(holes)
 
+    rows = []
+    for h in holes:
+        for s in h["shots"]:
+            rows.append({
+                "hole": h["hole_number"],
+                "par": h["par"],
+                "hole_yardage": h["yardage"],
+                "shot_number": s.get("shot_number"),
+                "result": s.get("result"),
+                "direction": s.get("direction"),
+                "distance_to_hole": s.get("distance_to_hole"),
+                "putt_distance": s.get("putt_distance"),
+            })
+
+    df = pd.DataFrame(rows)
+
+    total_shots = len(df)
+    total_par = sum(h["par"] for h in holes)
+    st.write(f"**Score:** {total_shots} (Par {total_par}, {total_shots - total_par:+})")
+
     fw_holes = [h for h in holes if h["par"] in (4, 5)]
     fw_hit = sum(1 for h in fw_holes if h["shots"][0]["result"] == "fairway")
 
     st.subheader("Fairways Hit")
     st.write(f"{fw_hit} / {len(fw_holes)}")
 
-    gir = 0
-    for h in holes:
-        for s in h["shots"]:
-            if s.get("result") == "green" and s["shot_number"] <= h["par"] - 2:
-                gir += 1
-                break
+    gir = sum(
+        1 for h in holes
+        if any(s.get("result") == "green" and s["shot_number"] <= h["par"] - 2 for s in h["shots"])
+    )
 
     st.subheader("Greens in Regulation")
     st.write(f"{gir} / {holes_played}")
 
-    total_putts = sum(1 for h in holes for s in h["shots"] if "putt_distance" in s)
+    putts = df[df["putt_distance"].notna()]
     st.subheader("Putting")
-    st.write(f"Total Putts: {total_putts}")
-    st.write(f"Putts per Hole: {total_putts / holes_played:.2f}")
+    st.write(f"Total Putts: {len(putts)}")
+    st.write(f"Putts per Hole: {len(putts) / holes_played:.2f}")
 
+    st.subheader("Export Round Data")
+
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇ Download CSV (Google Sheets)", csv, "round_data.csv")
+
+    excel_buffer = BytesIO()
+    df.to_excel(excel_buffer, index=False)
+    st.download_button(
+        "⬇ Download Excel",
+        excel_buffer.getvalue(),
+        "round_data.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
