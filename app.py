@@ -327,29 +327,102 @@ elif st.session_state.page == "summary":
 
     df = pd.DataFrame(rows)
 
+    # -------------------------
+    # SCORE
+    # -------------------------
     total_shots = len(df)
     total_par = sum(h["par"] for h in holes)
-    st.write(f"**Score:** {total_shots} (Par {total_par}, {total_shots - total_par:+})")
+    st.subheader("Score")
+    st.write(f"{total_shots} (Par {total_par}, {total_shots - total_par:+})")
 
+    # -------------------------
+    # FAIRWAYS
+    # -------------------------
     fw_holes = [h for h in holes if h["par"] in (4, 5)]
-    fw_hit = sum(1 for h in fw_holes if h["shots"][0]["result"] == "fairway")
+    fw_shots = [h["shots"][0] for h in fw_holes]
+    fw_hit = sum(1 for s in fw_shots if s["result"] == "fairway")
+    fw_left = sum(1 for s in fw_shots if s.get("direction") == "left")
+    fw_right = sum(1 for s in fw_shots if s.get("direction") == "right")
 
-    st.subheader("Fairways Hit")
-    st.write(f"{fw_hit} / {len(fw_holes)}")
+    st.subheader("Fairways Hit (Par 4 & 5)")
+    st.write(f"{fw_hit} / {len(fw_holes)} ({fw_hit / len(fw_holes) * 100:.1f}%)")
+    st.write(f"Miss Left: {fw_left} • Miss Right: {fw_right}")
 
-    gir = sum(
-        1 for h in holes
-        if any(s.get("result") == "green" and s["shot_number"] <= h["par"] - 2 for s in h["shots"])
-    )
+    # -------------------------
+    # GREENS IN REGULATION (FIXED)
+    # -------------------------
+    gir = 0
+    miss_dir = {"left": 0, "right": 0, "short": 0, "long": 0}
+    first_putt_dist = []
+    first_putt_dist_gir = []
+    first_putt_dist_miss = []
+
+    for h in holes:
+        putts = [s for s in h["shots"] if s.get("putt_distance") is not None]
+        if not putts:
+            continue
+
+        first_putt = putts[0]
+        first_putt_dist.append(first_putt["putt_distance"])
+
+        if first_putt["shot_number"] <= h["par"] - 1:
+            gir += 1
+            first_putt_dist_gir.append(first_putt["putt_distance"])
+        else:
+            first_putt_dist_miss.append(first_putt["putt_distance"])
+            prev = h["shots"][first_putt["shot_number"] - 2]
+            if prev.get("direction") in miss_dir:
+                miss_dir[prev["direction"]] += 1
 
     st.subheader("Greens in Regulation")
-    st.write(f"{gir} / {holes_played}")
+    st.write(f"{gir} / {holes_played} ({gir / holes_played * 100:.1f}%)")
+    st.write(
+        f"Miss L/R/S/L: "
+        f"{miss_dir['left']} / {miss_dir['right']} / "
+        f"{miss_dir['short']} / {miss_dir['long']}"
+    )
 
+    # -------------------------
+    # SCRAMBLING
+    # -------------------------
+    scramble_opps = holes_played - gir
+    scramble_made = 0
+
+    for h in holes:
+        putts = [s for s in h["shots"] if s.get("putt_distance") is not None]
+        if not putts:
+            continue
+        first_putt = putts[0]
+        if first_putt["shot_number"] > h["par"] - 1:
+            if any(s.get("result") == "hole" for s in h["shots"]):
+                scramble_made += 1
+
+    st.subheader("Scrambling")
+    if scramble_opps > 0:
+        st.write(f"{scramble_made} / {scramble_opps} ({scramble_made / scramble_opps * 100:.1f}%)")
+    else:
+        st.write("N/A")
+
+    # -------------------------
+    # PUTTING
+    # -------------------------
     putts = df[df["putt_distance"].notna()]
+
     st.subheader("Putting")
     st.write(f"Total Putts: {len(putts)}")
     st.write(f"Putts per Hole: {len(putts) / holes_played:.2f}")
+    if gir > 0:
+        st.write(f"Putts per GIR: {len(putts) / gir:.2f}")
 
+    st.write(f"Avg First Putt: {sum(first_putt_dist) / len(first_putt_dist):.1f} ft")
+    if first_putt_dist_gir:
+        st.write(f"Avg First Putt (GIR): {sum(first_putt_dist_gir) / len(first_putt_dist_gir):.1f} ft")
+    if first_putt_dist_miss:
+        st.write(f"Avg First Putt (Missed GIR): {sum(first_putt_dist_miss) / len(first_putt_dist_miss):.1f} ft")
+
+    # -------------------------
+    # EXPORT
+    # -------------------------
     st.subheader("Export Round Data")
 
     csv = df.to_csv(index=False).encode("utf-8")
