@@ -341,3 +341,4 @@ elif st.session_state.page == "summary":
     st.subheader("Putting")
     st.write(f"Total Putts: {total_putts}")
     st.write(f"Putts per Hole: {total_putts / holes_played:.2f}")
+
