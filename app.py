@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -327,17 +328,13 @@ elif st.session_state.page == "summary":
 
     df = pd.DataFrame(rows)
 
-    # -------------------------
     # SCORE
-    # -------------------------
     total_shots = len(df)
     total_par = sum(h["par"] for h in holes)
     st.subheader("Score")
     st.write(f"{total_shots} (Par {total_par}, {total_shots - total_par:+})")
 
-    # -------------------------
     # FAIRWAYS
-    # -------------------------
     fw_holes = [h for h in holes if h["par"] in (4, 5)]
     fw_shots = [h["shots"][0] for h in fw_holes]
     fw_hit = sum(1 for s in fw_shots if s["result"] == "fairway")
@@ -348,9 +345,7 @@ elif st.session_state.page == "summary":
     st.write(f"{fw_hit} / {len(fw_holes)} ({fw_hit / len(fw_holes) * 100:.1f}%)")
     st.write(f"Miss Left: {fw_left} • Miss Right: {fw_right}")
 
-    # -------------------------
-    # GREENS IN REGULATION (FIXED)
-    # -------------------------
+    # GREENS IN REGULATION
     gir = 0
     miss_dir = {"left": 0, "right": 0, "short": 0, "long": 0}
     first_putt_dist = []
@@ -382,9 +377,7 @@ elif st.session_state.page == "summary":
         f"{miss_dir['short']} / {miss_dir['long']}"
     )
 
-    # -------------------------
     # SCRAMBLING
-    # -------------------------
     scramble_opps = holes_played - gir
     scramble_made = 0
 
@@ -403,11 +396,8 @@ elif st.session_state.page == "summary":
     else:
         st.write("N/A")
 
-    # -------------------------
     # PUTTING
-    # -------------------------
     putts = df[df["putt_distance"].notna()]
-
     st.subheader("Putting")
     st.write(f"Total Putts: {len(putts)}")
     st.write(f"Putts per Hole: {len(putts) / holes_played:.2f}")
@@ -420,19 +410,20 @@ elif st.session_state.page == "summary":
     if first_putt_dist_miss:
         st.write(f"Avg First Putt (Missed GIR): {sum(first_putt_dist_miss) / len(first_putt_dist_miss):.1f} ft")
 
-    # -------------------------
     # EXPORT
-    # -------------------------
     st.subheader("Export Round Data")
 
     csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇ Download CSV (Google Sheets)", csv, "round_data.csv")
+    st.download_button("⬇ Download CSV (Google Sheets)", csv, "round_data.csv", mime="text/csv")
 
-    excel_buffer = BytesIO()
-    df.to_excel(excel_buffer, index=False)
-    st.download_button(
-        "⬇ Download Excel",
-        excel_buffer.getvalue(),
-        "round_data.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    try:
+        excel_buffer = BytesIO()
+        df.to_excel(excel_buffer, index=False)
+        st.download_button(
+            "⬇ Download Excel",
+            excel_buffer.getvalue(),
+            "round_data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception:
+        st.info("Excel export unavailable on this server. Use CSV or enable openpyxl.")
