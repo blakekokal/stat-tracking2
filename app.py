@@ -1,145 +1,124 @@
 import streamlit as st
 
-# ============================
-# Session State Initialization
-# ============================
-if "page" not in st.session_state:
-    st.session_state.page = "round_setup"
+# =========================
+# Session State Init
+# =========================
+def init():
+    if "page" not in st.session_state:
+        st.session_state.page = "round"
+    if "round" not in st.session_state:
+        st.session_state.round = {}
+    if "hole" not in st.session_state:
+        st.session_state.hole = {}
+    if "shot" not in st.session_state:
+        st.session_state.shot = {}
 
-if "round" not in st.session_state:
-    st.session_state.round = {
-        "holes": []
-    }
+init()
 
-if "hole" not in st.session_state:
-    st.session_state.hole = None
+# =========================
+# Helpers
+# =========================
+def go(page):
+    st.session_state.page = page
 
-if "shot" not in st.session_state:
-    st.session_state.shot = None
+def big_button(label, next_page=None):
+    if st.button(label, use_container_width=True):
+        if next_page:
+            go(next_page)
 
+def set_and_go(key, value, next_page):
+    st.session_state.shot[key] = value
+    go(next_page)
 
-# ============================
-# Helper
-# ============================
-def big_buttons(options, cols=2):
-    buttons = st.columns(cols)
-    clicked = None
-    for i, opt in enumerate(options):
-        if buttons[i % cols].button(opt, use_container_width=True):
-            clicked = opt
-    return clicked
-
-
-# ============================
+# =========================
 # ROUND SETUP
-# ============================
-if st.session_state.page == "round_setup":
+# =========================
+if st.session_state.page == "round":
     st.title("Golf Stat Tracker")
 
-    player = st.text_input("Player Name")
-    course = st.text_input("Course Name")
-    holes = st.number_input("Holes Played", 1, 18, 18)
-    par = st.number_input("Course Par", 9, 90, holes * 4)
+    st.session_state.round["player"] = st.text_input("Player Name")
+    st.session_state.round["course"] = st.text_input("Course Name")
+    st.session_state.round["holes_played"] = st.number_input("Holes Played", 1, 18, 18)
+    st.session_state.round["course_par"] = st.number_input(
+        "Course Par", 9, 90, st.session_state.round["holes_played"] * 4
+    )
+    st.session_state.round["holes"] = []
 
-    if st.button("Start Round", use_container_width=True):
-        st.session_state.round.update({
-            "player": player,
-            "course": course,
-            "holes_played": holes,
-            "course_par": par,
-            "holes": []
-        })
-        st.session_state.page = "hole_setup"
+    big_button("Start Round", "hole")
 
-
-# ============================
+# =========================
 # HOLE SETUP
-# ============================
-elif st.session_state.page == "hole_setup":
-    hole_number = len(st.session_state.round["holes"]) + 1
-    st.header(f"Hole {hole_number}")
+# =========================
+elif st.session_state.page == "hole":
+    hole_num = len(st.session_state.round["holes"]) + 1
+    st.header(f"Hole {hole_num}")
 
-    hole_par = st.number_input("Hole Par", 3, 5, 4)
-    hole_yards = st.number_input("Hole Yardage", 50, 800, 400)
+    st.session_state.hole = {
+        "number": hole_num,
+        "par": st.number_input("Hole Par", 3, 5, 4),
+        "yardage": st.number_input("Hole Yardage", 50, 800, 400),
+        "shots": []
+    }
 
-    if st.button("Start Hole", use_container_width=True):
-        st.session_state.hole = {
-            "hole_number": hole_number,
-            "par": hole_par,
-            "yardage": hole_yards,
-            "shots": []
-        }
-        st.session_state.shot = {
-            "number": 1
-        }
-        st.session_state.page = "shot_distance"
+    big_button("Start Hole", "shot_distance")
 
-
-# ============================
-# SHOT 1: DISTANCE
-# ============================
+# =========================
+# SHOT – DISTANCE
+# =========================
 elif st.session_state.page == "shot_distance":
-    st.header(f"Hole {st.session_state.hole['hole_number']} – Shot {st.session_state.shot['number']}")
-    yards = st.number_input("How far did the shot go? (yards)", 0, 400, 150)
+    shot_num = len(st.session_state.hole["shots"]) + 1
+    st.header(f"Hole {st.session_state.hole['number']} – Shot {shot_num}")
 
-    if st.button("Next", use_container_width=True):
-        st.session_state.shot["distance"] = yards
-        st.session_state.page = "shot_result"
+    st.session_state.shot = {
+        "number": shot_num,
+        "distance": st.number_input("How far did the shot go? (yards)", 0, 400, 150)
+    }
 
+    big_button("Next", "shot_result")
 
-# ============================
-# SHOT 2: RESULT (BIG BUTTONS)
-# ============================
+# =========================
+# SHOT – RESULT
+# =========================
 elif st.session_state.page == "shot_result":
     st.header("Where did the ball go?")
 
-    choice = big_buttons(
-        ["Fairway", "Rough", "Bunker", "Water", "Green", "Hole"],
-        cols=2
-    )
+    cols = st.columns(2)
+    for i, opt in enumerate(["Fairway", "Rough", "Bunker", "Water", "Green", "Hole"]):
+        if cols[i % 2].button(opt, use_container_width=True):
+            st.session_state.shot["result"] = opt.lower()
+            if opt == "Green":
+                go("putt_distance")
+            elif opt in ["Fairway", "Hole"]:
+                go("save_shot")
+            else:
+                go("shot_direction")
 
-    if choice:
-        st.session_state.shot["result"] = choice.lower()
-        if choice == "Green":
-            st.session_state.page = "putt_distance"
-        elif choice in ["Fairway", "Hole"]:
-            st.session_state.page = "save_shot"
-        else:
-            st.session_state.page = "shot_direction"
-
-
-# ============================
-# SHOT 3: DIRECTION
-# ============================
+# =========================
+# SHOT – DIRECTION
+# =========================
 elif st.session_state.page == "shot_direction":
     st.header("Which direction?")
 
-    direction = big_buttons(
-        ["Left", "Right", "Short", "Long"],
-        cols=2
-    )
+    cols = st.columns(2)
+    for i, d in enumerate(["Left", "Right", "Short", "Long"]):
+        if cols[i % 2].button(d, use_container_width=True):
+            set_and_go("direction", d.lower(), "save_shot")
 
-    if direction:
-        st.session_state.shot["direction"] = direction.lower()
-        st.session_state.page = "save_shot"
-
-
-# ============================
+# =========================
 # PUTTING DISTANCE
-# ============================
+# =========================
 elif st.session_state.page == "putt_distance":
     st.header("Putting")
 
-    feet = st.number_input("How far from the hole? (feet)", 0, 100, 15)
+    st.session_state.shot["putt_distance"] = st.number_input(
+        "How far from the hole? (feet)", 0, 100, 15
+    )
 
-    if st.button("Next", use_container_width=True):
-        st.session_state.shot["putt_distance"] = feet
-        st.session_state.page = "save_shot"
+    big_button("Next", "save_shot")
 
-
-# ============================
+# =========================
 # SAVE SHOT
-# ============================
+# =========================
 elif st.session_state.page == "save_shot":
     st.session_state.hole["shots"].append(st.session_state.shot)
 
@@ -147,20 +126,15 @@ elif st.session_state.page == "save_shot":
         st.session_state.round["holes"].append(st.session_state.hole)
 
         if len(st.session_state.round["holes"]) >= st.session_state.round["holes_played"]:
-            st.session_state.page = "summary"
+            go("summary")
         else:
-            st.session_state.page = "hole_setup"
+            go("hole")
     else:
-        st.session_state.shot = {
-            "number": st.session_state.shot["number"] + 1
-        }
-        st.session_state.page = "shot_distance"
+        go("shot_distance")
 
-
-# ============================
-# SUMMARY (TEMP)
-# ============================
+# =========================
+# SUMMARY
+# =========================
 elif st.session_state.page == "summary":
     st.title("Round Complete")
-    st.write("Raw round data (stats next):")
     st.json(st.session_state.round)
