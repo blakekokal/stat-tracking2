@@ -1,51 +1,20 @@
 import streamlit as st
 
 # =========================
-# CSS FOR COLOR-CODED BUTTONS
-# =========================
-st.markdown("""
-<style>
-div[data-testid="stButton"] button {
-    height: 70px;
-    font-size: 18px;
-    font-weight: bold;
-}
-
-/* Fairway */
-button.fairway { background-color: #9be79b !important; color: black; }
-
-/* Rough */
-button.rough { background-color: #1e7f43 !important; color: white; }
-
-/* Green */
-button.green { background-color: #2ecc71 !important; color: black; }
-
-/* Bunkers */
-button.bunker { background-color: #f4d03f !important; color: black; }
-
-/* Water */
-button.water { background-color: #3498db !important; color: white; }
-
-/* Hole */
-button.hole { background-color: #000000 !important; color: white; }
-
-/* Out of Bounds */
-button.ob { background-color: #e74c3c !important; color: white; }
-</style>
-""", unsafe_allow_html=True)
-
-
-# =========================
 # Session State Init
 # =========================
 if "page" not in st.session_state:
     st.session_state.page = "round"
+
 if "round" not in st.session_state:
     st.session_state.round = {"holes": []}
+
 if "hole_index" not in st.session_state:
     st.session_state.hole_index = 1
+
 if "hole" not in st.session_state:
     st.session_state.hole = {}
+
 if "shot" not in st.session_state:
     st.session_state.shot = {}
 
@@ -56,8 +25,10 @@ if "shot" not in st.session_state:
 def go(page):
     st.session_state.page = page
 
+
 def save_shot():
     st.session_state.hole["shots"].append(st.session_state.shot)
+
 
 def finish_hole():
     st.session_state.round["holes"].append(st.session_state.hole)
@@ -67,20 +38,23 @@ def finish_hole():
     else:
         go("hole_setup")
 
+
 def shot_number():
     return len(st.session_state.hole.get("shots", [])) + 1
+
 
 def progress():
     return f"Hole {st.session_state.hole_index} of {st.session_state.round['holes_played']} • Shot {shot_number()}"
 
+
 def back():
-    flow = {
+    transitions = {
         "approach_distance": "shot_result",
         "shot_direction": "shot_result",
         "putt_distance": "shot_result",
         "putt_result": "putt_distance",
     }
-    go(flow.get(st.session_state.page, "shot_result"))
+    go(transitions.get(st.session_state.page, "shot_result"))
 
 
 # =========================
@@ -123,72 +97,107 @@ elif st.session_state.page == "shot_result":
     st.caption(progress())
     st.subheader("Tap where the ball finished")
 
-    # GREEN ZONE
-    st.markdown("### 🟢 Green")
+    # GREEN AREA
+    st.markdown("### Green")
     g1, g2 = st.columns(2)
 
-    g1.button("Green", key="green", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "green"}}),
-                  go("putt_distance")
-              ))
-    g2.button("Hole", key="hole", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "hole"}}),
-                  save_shot(),
-                  finish_hole()
-              ))
+    g1.button(
+        "Green",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "green"}}),
+            go("putt_distance")
+        )
+    )
 
-    st.button("Greenside Bunker", key="gsb", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "greenside_bunker"}}),
-                  save_shot(),
-                  go("approach_distance")
-              ))
+    g2.button(
+        "Hole",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "hole"}}),
+            save_shot(),
+            finish_hole()
+        )
+    )
 
-    # FAIRWAY ZONE
-    st.markdown("### 🟩 Fairway")
+    st.button(
+        "Greenside Bunker",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "greenside_bunker"}}),
+            save_shot(),
+            go("approach_distance")
+        )
+    )
+
+    # FAIRWAY AREA
+    st.markdown("### Fairway")
     f1, f2, f3 = st.columns(3)
 
-    f1.button("Left Rough", key="lr", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "rough", "direction": "left"}}),
-                  save_shot(),
-                  go("approach_distance")
-              ))
-    f2.button("Fairway", key="fw", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway"}}),
-                  save_shot(),
-                  go("approach_distance")
-              ))
-    f3.button("Right Rough", key="rr", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "rough", "direction": "right"}}),
-                  save_shot(),
-                  go("approach_distance")
-              ))
+    f1.button(
+        "Left Rough",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({
+                "shot": {"shot_number": shot_number(), "result": "rough", "direction": "left"}
+            }),
+            save_shot(),
+            go("approach_distance")
+        )
+    )
 
-    st.button("Fairway Bunker", key="fb", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway_bunker"}}),
-                  go("shot_direction")
-              ))
+    f2.button(
+        "Fairway",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway"}}),
+            save_shot(),
+            go("approach_distance")
+        )
+    )
+
+    f3.button(
+        "Right Rough",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({
+                "shot": {"shot_number": shot_number(), "result": "rough", "direction": "right"}
+            }),
+            save_shot(),
+            go("approach_distance")
+        )
+    )
+
+    st.button(
+        "Fairway Bunker",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway_bunker"}}),
+            go("shot_direction")
+        )
+    )
 
     # OTHER
-    st.markdown("### 🟦 Other")
+    st.markdown("### Other")
     o1, o2 = st.columns(2)
 
-    o1.button("Water", key="water", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "water"}}),
-                  go("shot_direction")
-              ))
-    o2.button("Out of Bounds", key="ob", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "out_of_bounds"}}),
-                  go("shot_direction")
-              ))
+    o1.button(
+        "Water",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "water"}}),
+            go("shot_direction")
+        )
+    )
+
+    o2.button(
+        "Out of Bounds",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "out_of_bounds"}}),
+            go("shot_direction")
+        )
+    )
 
     st.button("⬅ Back", use_container_width=True, on_click=back)
 
@@ -218,13 +227,30 @@ elif st.session_state.page == "shot_direction":
     st.subheader("Which direction?")
 
     d1, d2, d3, d4 = st.columns(4)
-    for label in ["Left", "Right", "Short", "Long"]:
-        d1.button(label, use_container_width=True,
-                  on_click=lambda l=label: (
-                      st.session_state.shot.update({"direction": l.lower()}),
-                      save_shot(),
-                      go("approach_distance")
-                  ))
+    d1.button("Left", use_container_width=True,
+              on_click=lambda: (
+                  st.session_state.shot.update({"direction": "left"}),
+                  save_shot(),
+                  go("approach_distance")
+              ))
+    d2.button("Right", use_container_width=True,
+              on_click=lambda: (
+                  st.session_state.shot.update({"direction": "right"}),
+                  save_shot(),
+                  go("approach_distance")
+              ))
+    d3.button("Short", use_container_width=True,
+              on_click=lambda: (
+                  st.session_state.shot.update({"direction": "short"}),
+                  save_shot(),
+                  go("approach_distance")
+              ))
+    d4.button("Long", use_container_width=True,
+              on_click=lambda: (
+                  st.session_state.shot.update({"direction": "long"}),
+                  save_shot(),
+                  go("approach_distance")
+              ))
 
     st.button("⬅ Back", use_container_width=True, on_click=back)
 
@@ -254,12 +280,15 @@ elif st.session_state.page == "putt_result":
     st.subheader("Where did the putt go?")
 
     for label in ["Left", "Right", "Short", "Long", "Hole"]:
-        st.button(label, use_container_width=True,
-                  on_click=lambda l=label: (
-                      st.session_state.shot.update({"result": l.lower()}),
-                      save_shot(),
-                      finish_hole() if l == "Hole" else go("putt_distance")
-                  ))
+        st.button(
+            label,
+            use_container_width=True,
+            on_click=lambda l=label: (
+                st.session_state.shot.update({"result": l.lower()}),
+                save_shot(),
+                finish_hole() if l == "Hole" else go("putt_distance")
+            )
+        )
 
     st.button("⬅ Back", use_container_width=True, on_click=back)
 
