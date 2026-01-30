@@ -68,10 +68,10 @@ if st.session_state.round is None:
     course = st.text_input("Course Name")
     holes_played = st.number_input("Holes Played", min_value=1, max_value=18, value=18, step=1)
     course_par = st.number_input("Course Par", min_value=9, max_value=72, value=holes_played*4, step=1)
+    
     if player and course:
         if st.button("Start Round"):
             start_new_round(player, course, holes_played, course_par)
-            st.experimental_rerun()  # only here, safe on setup
 
 # ------------------------------
 # Hole & Shot Entry
@@ -99,7 +99,7 @@ elif st.session_state.current_hole <= st.session_state.round["holes_played"]:
         st.subheader(f"Hole {hole_num} - Shot {shot_num}")
         st.caption(f"Progress: Hole {hole_num} of {st.session_state.round['holes_played']}, Shot {shot_num}")
 
-        start_lie = "tee" if shot_num==1 else st.session_state.current_hole_obj["shots"][-1]["end_lie"]
+        start_lie = "tee" if shot_num == 1 else st.session_state.current_hole_obj["shots"][-1]["end_lie"]
         distance = None
         distance_to_hole = None
 
