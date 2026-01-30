@@ -175,14 +175,32 @@ elif st.session_state.current_hole <= st.session_state.round.holes_played:
             st.session_state.current_shot = 1
             st.experimental_rerun()
 
-    # Shot entry with buttons
+    # Shot entry with buttons + progress + go back
     else:
         shot_num = st.session_state.current_shot
         st.subheader(f"Hole {hole_num} - Shot {shot_num}")
-        start_lie = "tee" if shot_num==1 else st.session_state.current_hole_obj.shots[-1].end_lie
+        st.caption(f"Progress: Hole {hole_num} of {st.session_state.round.holes_played}, Shot {shot_num}")
 
-        # Distance for non-putts
+        start_lie = "tee" if shot_num==1 else st.session_state.current_hole_obj.shots[-1].end_lie
         distance = None
+        distance_to_hole = None
+
+        # Go Back button
+        col1, col2 = st.columns([1,3])
+        with col1:
+            if st.button("Go Back / Edit Last Shot"):
+                if shot_num > 1:
+                    st.session_state.current_hole_obj.shots.pop()
+                    st.session_state.current_shot -= 1
+                else:
+                    if st.session_state.current_hole > 1:
+                        st.session_state.current_hole -= 1
+                        prev_hole = st.session_state.round.holes.pop()
+                        st.session_state.current_hole_obj = prev_hole
+                        st.session_state.current_shot = len(prev_hole.shots)
+                st.experimental_rerun()
+
+        # Distance input
         if start_lie != "green":
             distance = st.number_input("Shot distance (yards)", min_value=0, step=1, format="%d", key=f"dist_{hole_num}_{shot_num}")
 
@@ -196,7 +214,6 @@ elif st.session_state.current_hole <= st.session_state.round.holes_played:
 
         if clicked_lie:
             end_lie = clicked_lie
-            distance_to_hole = None
 
             # Stepwise side selection
             if end_lie == "rough":
@@ -218,7 +235,7 @@ elif st.session_state.current_hole <= st.session_state.round.holes_played:
 
             # Move to next shot or hole
             if end_lie == "hole":
-                rnd.holes.append(st.session_state.current_hole_obj)
+                st.session_state.round.holes.append(st.session_state.current_hole_obj)
                 st.session_state.current_hole += 1
                 st.session_state.current_shot = 1
                 st.session_state.current_hole_obj = None
