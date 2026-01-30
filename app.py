@@ -7,7 +7,7 @@ if "page" not in st.session_state:
     st.session_state.page = "round"
 
 if "round" not in st.session_state:
-    st.session_state.round = {}
+    st.session_state.round = {"holes": []}
 
 if "hole_index" not in st.session_state:
     st.session_state.hole_index = 1
@@ -18,24 +18,46 @@ if "hole" not in st.session_state:
 if "shot" not in st.session_state:
     st.session_state.shot = {}
 
+if "history" not in st.session_state:
+    st.session_state.history = []
+
 
 # =========================
-# Navigation Helper
+# Helpers
 # =========================
 def go(page):
+    st.session_state.history.append(st.session_state.page)
     st.session_state.page = page
 
 
-def save_shot_and_continue():
+def back():
+    if st.session_state.history:
+        st.session_state.page = st.session_state.history.pop()
+
+
+def save_shot():
     st.session_state.hole["shots"].append(st.session_state.shot)
-    go("shot_distance")
+
+
+def finish_hole():
+    st.session_state.round["holes"].append(st.session_state.hole)
+    st.session_state.hole_index += 1
+
+    if st.session_state.hole_index > st.session_state.round["holes_played"]:
+        st.session_state.page = "summary"
+    else:
+        st.session_state.page = "hole_setup"
+
+
+def progress():
+    return f"Hole {st.session_state.hole_index} of {st.session_state.round['holes_played']} • Shot {len(st.session_state.hole.get('shots', [])) + 1}"
 
 
 # =========================
 # ROUND SETUP
 # =========================
 if st.session_state.page == "round":
-    st.title("Golf Stat Tracker – Round Setup")
+    st.title("Golf Stat Tracker")
 
     st.session_state.round["player"] = st.text_input("Player Name")
     st.session_state.round["course"] = st.text_input("Course Name")
@@ -52,7 +74,7 @@ if st.session_state.page == "round":
 # HOLE SETUP
 # =========================
 elif st.session_state.page == "hole_setup":
-    st.title(f"Hole {st.session_state.hole_index} Setup")
+    st.subheader(f"Hole {st.session_state.hole_index} Setup")
 
     st.session_state.hole = {
         "hole_number": st.session_state.hole_index,
@@ -68,25 +90,24 @@ elif st.session_state.page == "hole_setup":
 # SHOT DISTANCE
 # =========================
 elif st.session_state.page == "shot_distance":
-    shot_number = len(st.session_state.hole["shots"]) + 1
-
-    st.title(f"Hole {st.session_state.hole_index} – Shot {shot_number}")
+    st.caption(progress())
+    st.subheader("How far did the shot go?")
 
     st.session_state.shot = {
-        "number": shot_number,
-        "distance": st.number_input(
-            "How far did the shot go? (yards)", 0, 400, 150, step=1
-        )
+        "distance": st.number_input("Yards", 0, 400, 150, step=1)
     }
 
-    st.button("Next", use_container_width=True, on_click=lambda: go("shot_result"))
+    col1, col2 = st.columns(2)
+    col1.button("Back", use_container_width=True, on_click=back)
+    col2.button("Next", use_container_width=True, on_click=lambda: go("shot_result"))
 
 
 # =========================
-# SHOT RESULT (AUTO-ADVANCE)
+# SHOT RESULT
 # =========================
 elif st.session_state.page == "shot_result":
-    st.title("Where did the ball go?")
+    st.caption(progress())
+    st.subheader("Where did the ball go?")
 
     cols = st.columns(2)
     options = ["Fairway", "Rough", "Bunker", "Water", "Green", "Hole"]
@@ -100,48 +121,82 @@ elif st.session_state.page == "shot_result":
             elif choice.lower() in ["rough", "bunker", "water"]:
                 go("shot_direction")
             elif choice.lower() == "hole":
-                save_shot_and_continue()
-            else:  # fairway
-                save_shot_and_continue()
+                save_shot()
+                finish_hole()
+            else:
+                save_shot()
+                go("shot_distance")
 
-        cols[i % 2].button(
-            opt,
-            use_container_width=True,
-            on_click=handler
-        )
+        cols[i % 2].button(opt, use_container_width=True, on_click=handler)
 
 
 # =========================
 # SHOT DIRECTION
 # =========================
 elif st.session_state.page == "shot_direction":
-    st.title("Which direction?")
+    st.caption(progress())
+    st.subheader("Which direction?")
 
     cols = st.columns(2)
     for i, d in enumerate(["Left", "Right", "Short", "Long"]):
         def handler(direction=d):
             st.session_state.shot["direction"] = direction.lower()
-            save_shot_and_continue()
+            save_shot()
+            go("shot_distance")
 
-        cols[i % 2].button(
-            d,
-            use_container_width=True,
-            on_click=handler
-        )
+        cols[i % 2].button(d, use_container_width=True, on_click=handler)
 
 
 # =========================
 # PUTTING DISTANCE
 # =========================
 elif st.session_state.page == "putt_distance":
-    st.title("Putting")
+    st.caption(progress())
+    st.subheader("Putting")
 
     st.session_state.shot["putt_distance"] = st.number_input(
-        "How far from the hole? (feet)", 0, 100, 15, step=1
+        "Feet from hole", 0, 100, 15, step=1
     )
 
-    st.button(
+    col1, col2 = st.columns(2)
+    col1.button("Back", use_container_width=True, on_click=back)
+    col2.button(
         "Confirm Putt",
         use_container_width=True,
-        on_click=save_shot_and_continue
+        on_click=lambda: (save_shot(), go("shot_distance"))
     )
+
+
+# =========================
+# SUMMARY (BASIC STATS)
+# =========================
+elif st.session_state.page == "summary":
+    st.title("Round Summary 🏁")
+
+    total_strokes = sum(len(h["shots"]) for h in st.session_state.round["holes"])
+    score_vs_par = total_strokes - st.session_state.round["course_par"]
+
+    putts = sum(
+        1 for h in st.session_state.round["holes"]
+        for s in h["shots"] if "putt_distance" in s
+    )
+
+    fairways = sum(
+        1 for h in st.session_state.round["holes"]
+        if h["shots"] and h["shots"][0]["result"] == "fairway"
+    )
+
+    gir = 0
+    for h in st.session_state.round["holes"]:
+        for i, s in enumerate(h["shots"], start=1):
+            if s["result"] == "green" and i <= h["par"] - 2:
+                gir += 1
+                break
+
+    st.metric("Total Strokes", total_strokes)
+    st.metric("Score vs Par", score_vs_par)
+    st.metric("Total Putts", putts)
+    st.metric("Fairways Hit", fairways)
+    st.metric("Greens in Regulation", gir)
+
+    st.json(st.session_state.round)
