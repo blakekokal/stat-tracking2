@@ -5,25 +5,18 @@ import streamlit as st
 # =========================
 if "page" not in st.session_state:
     st.session_state.page = "round"
-
 if "round" not in st.session_state:
     st.session_state.round = {"holes": []}
-
 if "hole_index" not in st.session_state:
     st.session_state.hole_index = 1
-
 if "hole" not in st.session_state:
     st.session_state.hole = None
+if "shot" not in st.session_state:
+    st.session_state.shot = None
 
-if "current_selection" not in st.session_state:
-    st.session_state.current_selection = None
 
-
-# =========================
-# NAV
-# =========================
-def go(page):
-    st.session_state.page = page
+def go(p):
+    st.session_state.page = p
 
 
 def shot_number():
@@ -31,7 +24,7 @@ def shot_number():
 
 
 # =========================
-# ROUND SETUP
+# ROUND START
 # =========================
 if st.session_state.page == "round":
     st.title("Golf Stat Tracker")
@@ -40,7 +33,10 @@ if st.session_state.page == "round":
     st.session_state.round["course"] = st.text_input("Course")
     st.session_state.round["holes_played"] = st.number_input("Holes", 1, 18, 18)
 
-    if st.button("Start Round", use_container_width=True):
+    with st.form("start_form"):
+        start = st.form_submit_button("Start Round")
+
+    if start:
         st.session_state.round["holes"] = []
         st.session_state.hole_index = 1
         go("hole_setup")
@@ -52,144 +48,157 @@ if st.session_state.page == "round":
 elif st.session_state.page == "hole_setup":
     st.subheader(f"Hole {st.session_state.hole_index}")
 
-    if st.button("Par 3", use_container_width=True):
-        st.session_state.hole = {"hole_number": st.session_state.hole_index, "par": 3, "yardage": 170, "shots": []}
+    with st.form("hole_form"):
+        par = st.radio("Par", [3, 4, 5], horizontal=True)
+        yardage = st.number_input("Yardage (yards)", 50, 800, 400, step=1)
 
-    if st.button("Par 4", use_container_width=True):
-        st.session_state.hole = {"hole_number": st.session_state.hole_index, "par": 4, "yardage": 400, "shots": []}
+        c1, c2 = st.columns(2)
+        back = c1.form_submit_button("Back")
+        confirm = c2.form_submit_button("Confirm Hole")
 
-    if st.button("Par 5", use_container_width=True):
-        st.session_state.hole = {"hole_number": st.session_state.hole_index, "par": 5, "yardage": 520, "shots": []}
+    if back:
+        go("round")
 
-    if st.session_state.hole:
-        st.session_state.hole["yardage"] = st.number_input(
-            "Hole Yardage (yards)", 50, 800, st.session_state.hole["yardage"], step=1
-        )
-
-        if st.button("Confirm Hole", use_container_width=True):
-            go("shot_select")
-
-        if st.button("Back", use_container_width=True):
-            st.session_state.hole = None
-            go("round")
+    if confirm:
+        st.session_state.hole = {
+            "hole_number": st.session_state.hole_index,
+            "par": par,
+            "yardage": yardage,
+            "shots": []
+        }
+        go("shot_result")
 
 
 # =========================
-# SHOT SELECTION
+# SHOT RESULT (SPATIAL, FORM)
 # =========================
-elif st.session_state.page == "shot_select":
+elif st.session_state.page == "shot_result":
     st.subheader(f"Hole {st.session_state.hole_index} • Shot {shot_number()}")
 
-    if st.button("Fairway", use_container_width=True):
-        st.session_state.current_selection = "fairway"
+    with st.form("shot_form"):
+        choice = None
 
-    if st.button("Left Rough", use_container_width=True):
-        st.session_state.current_selection = "left_rough"
+        if st.form_submit_button("HOLE"):
+            choice = "hole"
+        elif st.form_submit_button("Green"):
+            choice = "green"
+        elif st.form_submit_button("Greenside Bunker"):
+            choice = "greenside_bunker"
+        elif st.form_submit_button("Fairway"):
+            choice = "fairway"
 
-    if st.button("Right Rough", use_container_width=True):
-        st.session_state.current_selection = "right_rough"
+        c1, c2 = st.columns(2)
+        if c1.form_submit_button("Left Rough"):
+            choice = "rough_left"
+        if c2.form_submit_button("Right Rough"):
+            choice = "rough_right"
 
-    if st.button("Greenside Bunker", use_container_width=True):
-        st.session_state.current_selection = "greenside_bunker"
+        c1, c2 = st.columns(2)
+        if c1.form_submit_button("Water"):
+            choice = "water"
+        if c2.form_submit_button("Out of Bounds"):
+            choice = "out_of_bounds"
 
-    if st.button("Green", use_container_width=True):
-        st.session_state.current_selection = "green"
+        back = st.form_submit_button("Back")
 
-    if st.button("Water", use_container_width=True):
-        st.session_state.current_selection = "water"
-
-    if st.button("Out of Bounds", use_container_width=True):
-        st.session_state.current_selection = "out_of_bounds"
-
-    if st.button("Hole", use_container_width=True):
-        st.session_state.current_selection = "hole"
-
-    if st.session_state.current_selection:
-        if st.button("Confirm Shot", use_container_width=True):
-            shot = {
-                "shot_number": shot_number(),
-                "result": st.session_state.current_selection
-            }
-            st.session_state.hole["shots"].append(shot)
-            st.session_state.current_selection = None
-
-            if shot["result"] == "green":
-                go("putt_distance")
-            elif shot["result"] == "hole":
-                st.session_state.round["holes"].append(st.session_state.hole)
-                st.session_state.hole_index += 1
-                go("hole_setup" if st.session_state.hole_index <= st.session_state.round["holes_played"] else "summary")
-            else:
-                go("distance")
-
-    if st.button("Back", use_container_width=True):
-        st.session_state.current_selection = None
+    if back:
         go("hole_setup")
 
+    if choice:
+        shot = {"shot_number": shot_number(), "result": choice}
+        st.session_state.hole["shots"].append(shot)
+
+        if choice == "green":
+            go("putt_distance")
+        elif choice == "hole":
+            st.session_state.round["holes"].append(st.session_state.hole)
+            st.session_state.hole_index += 1
+            go("hole_setup" if st.session_state.hole_index <= st.session_state.round["holes_played"] else "summary")
+        else:
+            go("approach_distance")
+
 
 # =========================
-# DISTANCE TO HOLE
+# APPROACH DISTANCE
 # =========================
-elif st.session_state.page == "distance":
-    st.subheader("Distance to Hole")
+elif st.session_state.page == "approach_distance":
+    with st.form("distance_form"):
+        d = st.number_input("Distance to hole (yards)", 0, 400, 50, step=1)
+        back = st.form_submit_button("Back")
+        next_btn = st.form_submit_button("Confirm Distance")
 
-    d = st.number_input("Yards", 0, 400, 50, step=1)
-
-    if st.button("Confirm Distance", use_container_width=True):
-        st.session_state.hole["shots"][-1]["distance_to_hole"] = d
-        go("shot_select")
-
-    if st.button("Back", use_container_width=True):
+    if back:
         st.session_state.hole["shots"].pop()
-        go("shot_select")
+        go("shot_result")
+
+    if next_btn:
+        st.session_state.hole["shots"][-1]["distance_to_hole"] = d
+        go("shot_result")
 
 
 # =========================
 # PUTTING DISTANCE
 # =========================
 elif st.session_state.page == "putt_distance":
-    st.subheader("Putting")
+    with st.form("putt_dist_form"):
+        d = st.number_input("Putt distance (feet)", 0, 100, 15, step=1)
+        back = st.form_submit_button("Back")
+        next_btn = st.form_submit_button("Next")
 
-    d = st.number_input("Putt distance (feet)", 0, 100, 15, step=1)
+    if back:
+        st.session_state.hole["shots"].pop()
+        go("shot_result")
 
-    if st.button("Confirm Putt Distance", use_container_width=True):
-        st.session_state.hole["shots"].append({
-            "shot_number": shot_number(),
-            "putt_distance": d
-        })
+    if next_btn:
+        st.session_state.hole["shots"].append(
+            {"shot_number": shot_number(), "putt_distance": d}
+        )
         go("putt_result")
 
-    if st.button("Back", use_container_width=True):
-        go("shot_select")
-
 
 # =========================
-# PUTT RESULT
+# PUTT RESULT (ORIENTED)
 # =========================
 elif st.session_state.page == "putt_result":
-    st.subheader("Putt Result")
+    with st.form("putt_result_form"):
+        c1, c2, c3 = st.columns(3)
+        long = c2.form_submit_button("Long")
 
-    if st.button("Left", use_container_width=True):
-        st.session_state.hole["shots"][-1]["result"] = "left"
+        c1, c2, c3 = st.columns(3)
+        left = c1.form_submit_button("Left")
+        hole = c2.form_submit_button("Hole")
+        right = c3.form_submit_button("Right")
 
-    if st.button("Right", use_container_width=True):
-        st.session_state.hole["shots"][-1]["result"] = "right"
+        c1, c2, c3 = st.columns(3)
+        short = c2.form_submit_button("Short")
 
-    if st.button("Short", use_container_width=True):
-        st.session_state.hole["shots"][-1]["result"] = "short"
+        back = st.form_submit_button("Back")
 
-    if st.button("Long", use_container_width=True):
-        st.session_state.hole["shots"][-1]["result"] = "long"
-
-    if st.button("Hole", use_container_width=True):
-        st.session_state.hole["shots"][-1]["result"] = "hole"
-        st.session_state.round["holes"].append(st.session_state.hole)
-        st.session_state.hole_index += 1
-        go("hole_setup" if st.session_state.hole_index <= st.session_state.round["holes_played"] else "summary")
-
-    if st.button("Back", use_container_width=True):
+    if back:
         st.session_state.hole["shots"].pop()
         go("putt_distance")
+
+    result = None
+    if long:
+        result = "long"
+    elif left:
+        result = "left"
+    elif right:
+        result = "right"
+    elif short:
+        result = "short"
+    elif hole:
+        result = "hole"
+
+    if result:
+        st.session_state.hole["shots"][-1]["result"] = result
+
+        if result == "hole":
+            st.session_state.round["holes"].append(st.session_state.hole)
+            st.session_state.hole_index += 1
+            go("hole_setup" if st.session_state.hole_index <= st.session_state.round["holes_played"] else "summary")
+        else:
+            go("putt_distance")
 
 
 # =========================
