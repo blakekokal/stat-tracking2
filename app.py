@@ -78,7 +78,7 @@ if st.session_state.page == "round":
 
 
 # =========================
-# HOLE SETUP (PAR + YARDAGE + CONFIRM)
+# HOLE SETUP
 # =========================
 elif st.session_state.page == "hole_setup":
     st.subheader(f"Hole {st.session_state.hole_index} Setup")
@@ -101,8 +101,7 @@ elif st.session_state.page == "hole_setup":
     if st.session_state.temp_par:
         st.session_state.temp_yardage = st.number_input(
             "Hole Yardage (yards)",
-            50,
-            800,
+            50, 800,
             st.session_state.temp_yardage,
             step=1
         )
@@ -130,37 +129,45 @@ elif st.session_state.page == "hole_setup":
 
 
 # =========================
-# SHOT RESULT (HOLE MAP)
+# SHOT RESULT
 # =========================
 elif st.session_state.page == "shot_result":
     st.caption(progress())
     st.subheader("Tap where the ball finished")
 
-    # GREEN AREA
+    # HOLE (top)
+    st.button(
+        "HOLE",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "hole"}}),
+            save_shot(),
+            finish_hole()
+        )
+    )
+
+    # GREEN
     st.markdown("### Green")
-    g1, g2 = st.columns(2)
+    st.button(
+        "Green",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "green"}}),
+            go("putt_distance")
+        )
+    )
 
-    g1.button("Green", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "green"}}),
-                  go("putt_distance")
-              ))
+    st.button(
+        "Greenside Bunker",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "greenside_bunker"}}),
+            save_shot(),
+            go("approach_distance")
+        )
+    )
 
-    g2.button("Hole", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "hole"}}),
-                  save_shot(),
-                  finish_hole()
-              ))
-
-    st.button("Greenside Bunker", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "greenside_bunker"}}),
-                  save_shot(),
-                  go("approach_distance")
-              ))
-
-    # FAIRWAY AREA
+    # FAIRWAY
     st.markdown("### Fairway")
     f1, f2, f3 = st.columns(3)
 
@@ -185,11 +192,15 @@ elif st.session_state.page == "shot_result":
                   go("approach_distance")
               ))
 
-    st.button("Fairway Bunker", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway_bunker"}}),
-                  go("shot_direction")
-              ))
+    c1, c2, c3 = st.columns([1, 2, 1])
+    c2.button(
+        "Fairway Bunker",
+        use_container_width=True,
+        on_click=lambda: (
+            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway_bunker"}}),
+            go("shot_direction")
+        )
+    )
 
     # OTHER
     st.markdown("### Other")
@@ -282,26 +293,26 @@ elif st.session_state.page == "putt_distance":
 
 
 # =========================
-# PUTT RESULT (VISUAL MAP)
+# PUTT RESULT (FINAL ORIENTATION)
 # =========================
 elif st.session_state.page == "putt_result":
     st.caption(progress())
     st.subheader("Where did the putt go?")
 
-    # Top
+    # Long (top)
     c1, c2, c3 = st.columns(3)
-    c2.button("Left", use_container_width=True,
+    c2.button("Long", use_container_width=True,
               on_click=lambda: (
-                  st.session_state.shot.update({"result": "left"}),
+                  st.session_state.shot.update({"result": "long"}),
                   save_shot(),
                   go("putt_distance")
               ))
 
-    # Middle
+    # Left / Hole / Right
     c1, c2, c3 = st.columns(3)
-    c1.button("Short", use_container_width=True,
+    c1.button("Left", use_container_width=True,
               on_click=lambda: (
-                  st.session_state.shot.update({"result": "short"}),
+                  st.session_state.shot.update({"result": "left"}),
                   save_shot(),
                   go("putt_distance")
               ))
@@ -318,11 +329,11 @@ elif st.session_state.page == "putt_result":
                   go("putt_distance")
               ))
 
-    # Bottom
+    # Short (bottom)
     c1, c2, c3 = st.columns(3)
-    c2.button("Long", use_container_width=True,
+    c2.button("Short", use_container_width=True,
               on_click=lambda: (
-                  st.session_state.shot.update({"result": "long"}),
+                  st.session_state.shot.update({"result": "short"}),
                   save_shot(),
                   go("putt_distance")
               ))
@@ -331,7 +342,7 @@ elif st.session_state.page == "putt_result":
 
 
 # =========================
-# SUMMARY / STATS RECAP
+# SUMMARY / STATS
 # =========================
 elif st.session_state.page == "summary":
     st.title("Round Stats Recap 📊")
@@ -339,14 +350,12 @@ elif st.session_state.page == "summary":
     holes = st.session_state.round["holes"]
     holes_played = len(holes)
 
-    # Fairways
     fw_holes = [h for h in holes if h["par"] in (4, 5)]
     fw_hit = sum(1 for h in fw_holes if h["shots"][0]["result"] == "fairway")
 
     st.subheader("Fairways Hit")
     st.write(f"{fw_hit} / {len(fw_holes)}")
 
-    # GIR
     gir = 0
     for h in holes:
         for s in h["shots"]:
@@ -357,26 +366,7 @@ elif st.session_state.page == "summary":
     st.subheader("Greens in Regulation")
     st.write(f"{gir} / {holes_played}")
 
-    # Putting
     total_putts = sum(1 for h in holes for s in h["shots"] if "putt_distance" in s)
     st.subheader("Putting")
     st.write(f"Total Putts: {total_putts}")
     st.write(f"Putts per Hole: {total_putts / holes_played:.2f}")
-
-    # Distances
-    par4_app = []
-    par3_tee = []
-
-    for h in holes:
-        shots = h["shots"]
-        if h["par"] == 4 and len(shots) > 1 and "distance_to_hole" in shots[1]:
-            par4_app.append(shots[1]["distance_to_hole"])
-        if h["par"] == 3 and "distance_to_hole" in shots[0]:
-            par3_tee.append(shots[0]["distance_to_hole"])
-
-    st.subheader("Distance Averages")
-    if par4_app:
-        st.write(f"Avg Par 4 Approach: {sum(par4_app)/len(par4_app):.1f} yds")
-    if par3_tee:
-        st.write(f"Avg Par 3 Tee Shot: {sum(par3_tee)/len(par3_tee):.1f} yds")
-
