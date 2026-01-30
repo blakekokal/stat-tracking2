@@ -70,7 +70,7 @@ elif st.session_state.page == "hole_setup":
 
 
 # =========================
-# SHOT DISTANCE (NEW)
+# SHOT DISTANCE
 # =========================
 elif st.session_state.page == "shot_distance":
     shot_number = len(st.session_state.hole["shots"]) + 1
@@ -88,15 +88,32 @@ elif st.session_state.page == "shot_distance":
         )
     }
 
-    def save_shot_distance():
-        st.session_state.hole["shots"].append(st.session_state.shot)
-        go("confirm_shot")
-
     st.button(
         "Confirm Distance",
         use_container_width=True,
-        on_click=save_shot_distance
+        on_click=lambda: go("shot_result")
     )
+
+
+# =========================
+# SHOT RESULT (NEW)
+# =========================
+elif st.session_state.page == "shot_result":
+    st.title("Where did the ball go?")
+
+    cols = st.columns(2)
+    options = ["Fairway", "Rough", "Bunker", "Water", "Green", "Hole"]
+
+    for i, opt in enumerate(options):
+        def make_handler(choice=opt):
+            st.session_state.shot["result"] = choice.lower()
+            go("confirm_shot")
+
+        cols[i % 2].button(
+            opt,
+            use_container_width=True,
+            on_click=make_handler
+        )
 
 
 # =========================
@@ -105,11 +122,13 @@ elif st.session_state.page == "shot_distance":
 elif st.session_state.page == "confirm_shot":
     st.title("Shot Saved ✅")
 
+    st.session_state.hole["shots"].append(st.session_state.shot)
+
     st.write("Current Hole:")
     st.json(st.session_state.hole)
 
     st.button(
-        "Add Another Shot (next step)",
+        "Continue (next step)",
         use_container_width=True,
         on_click=lambda: go("done")
     )
@@ -119,5 +138,5 @@ elif st.session_state.page == "confirm_shot":
 # DONE PLACEHOLDER
 # =========================
 elif st.session_state.page == "done":
-    st.title("Step 2 Complete 🎉")
-    st.write("Shot distance entry works.")
+    st.title("Step 3 Complete 🎉")
+    st.write("Shot distance + result entry works.")
