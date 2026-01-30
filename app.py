@@ -1,47 +1,44 @@
 import streamlit as st
 
 # =========================
-# SESSION STATE INIT
+# SESSION STATE
 # =========================
-if "page" not in st.session_state:
-    st.session_state.page = "round"
+defaults = {
+    "page": "round",
+    "round": {"holes": []},
+    "hole_index": 1,
+    "hole": None,
+    "shot": None,
+    "advance": False,
+    "temp_par": None,
+    "temp_yardage": None,
+}
 
-if "round" not in st.session_state:
-    st.session_state.round = {"holes": []}
-
-if "hole_index" not in st.session_state:
-    st.session_state.hole_index = 1
-
-if "hole" not in st.session_state:
-    st.session_state.hole = {}
-
-if "shot" not in st.session_state:
-    st.session_state.shot = {}
-
-if "temp_par" not in st.session_state:
-    st.session_state.temp_par = None
-
-if "temp_yardage" not in st.session_state:
-    st.session_state.temp_yardage = None
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 
 # =========================
-# HELPERS
+# NAV HELPERS
 # =========================
 def go(page):
     st.session_state.page = page
+    st.session_state.advance = False
 
 
 def shot_number():
-    return len(st.session_state.hole.get("shots", [])) + 1
+    return len(st.session_state.hole["shots"]) + 1
 
 
 def progress():
-    return f"Hole {st.session_state.hole_index}/{st.session_state.round['holes_played']} • Shot {shot_number()}"
+    return f"Hole {st.session_state.hole_index} / {st.session_state.round['holes_played']} • Shot {shot_number()}"
 
 
-def save_shot():
+def save_shot_and_advance(next_page):
     st.session_state.hole["shots"].append(st.session_state.shot)
+    st.session_state.advance = True
+    st.session_state.next_page = next_page
 
 
 def finish_hole():
@@ -53,19 +50,15 @@ def finish_hole():
         go("hole_setup")
 
 
-def back():
-    if st.session_state.page in ["approach_distance", "shot_direction", "putt_distance"]:
-        go("shot_result")
-    elif st.session_state.page == "putt_result":
-        go("putt_distance")
-    elif st.session_state.page == "shot_result":
-        go("hole_setup")
-    else:
-        go("round")
+# =========================
+# AUTO ADVANCE (KEY FIX)
+# =========================
+if st.session_state.advance:
+    go(st.session_state.next_page)
 
 
 # =========================
-# ROUND SETUP
+# ROUND START
 # =========================
 if st.session_state.page == "round":
     st.title("Golf Stat Tracker")
@@ -86,35 +79,25 @@ if st.session_state.page == "round":
 elif st.session_state.page == "hole_setup":
     st.subheader(f"Hole {st.session_state.hole_index}")
 
-    p1, p2, p3 = st.columns(3)
-
-    if p1.button("Par 3", use_container_width=True):
+    c1, c2, c3 = st.columns(3)
+    if c1.button("Par 3", use_container_width=True):
         st.session_state.temp_par = 3
         st.session_state.temp_yardage = 170
-
-    if p2.button("Par 4", use_container_width=True):
+    if c2.button("Par 4", use_container_width=True):
         st.session_state.temp_par = 4
         st.session_state.temp_yardage = 400
-
-    if p3.button("Par 5", use_container_width=True):
+    if c3.button("Par 5", use_container_width=True):
         st.session_state.temp_par = 5
         st.session_state.temp_yardage = 520
 
     if st.session_state.temp_par:
         st.session_state.temp_yardage = st.number_input(
-            "Yardage (yards)",
-            50, 800,
-            st.session_state.temp_yardage,
-            step=1
+            "Yardage", 50, 800, st.session_state.temp_yardage, step=1
         )
 
         c1, c2 = st.columns(2)
-
         if c1.button("Back", use_container_width=True):
-            st.session_state.temp_par = None
-            st.session_state.temp_yardage = None
             go("round")
-
         if c2.button("Confirm", use_container_width=True):
             st.session_state.hole = {
                 "hole_number": st.session_state.hole_index,
@@ -128,56 +111,50 @@ elif st.session_state.page == "hole_setup":
 
 
 # =========================
-# SHOT RESULT
+# SHOT RESULT (SPATIAL)
 # =========================
 elif st.session_state.page == "shot_result":
     st.caption(progress())
 
+    # HOLE (top)
     if st.button("HOLE", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "hole"}
-        save_shot()
-        finish_hole()
+        st.session_state.shot = {"shot": shot_number(), "result": "hole"}
+        save_shot_and_advance("finish")
 
+    # GREEN
     if st.button("Green", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "green"}
+        st.session_state.shot = {"shot": shot_number(), "result": "green"}
         go("putt_distance")
 
     if st.button("Greenside Bunker", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "greenside_bunker"}
-        save_shot()
-        go("approach_distance")
+        st.session_state.shot = {"shot": shot_number(), "result": "greenside_bunker"}
+        save_shot_and_advance("approach_distance")
+
+    # FAIRWAY ZONE (TRUE GRID)
+    st.markdown("### Fairway")
 
     if st.button("Fairway", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "fairway"}
-        save_shot()
-        go("approach_distance")
+        st.session_state.shot = {"shot": shot_number(), "result": "fairway"}
+        save_shot_and_advance("approach_distance")
 
-    r1, r2 = st.columns(2)
-    if r1.button("Left Rough", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "rough", "direction": "left"}
-        save_shot()
-        go("approach_distance")
+    l, r = st.columns(2)
+    if l.button("Left Rough", use_container_width=True):
+        st.session_state.shot = {"shot": shot_number(), "result": "rough", "direction": "left"}
+        save_shot_and_advance("approach_distance")
 
-    if r2.button("Right Rough", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "rough", "direction": "right"}
-        save_shot()
-        go("approach_distance")
+    if r.button("Right Rough", use_container_width=True):
+        st.session_state.shot = {"shot": shot_number(), "result": "rough", "direction": "right"}
+        save_shot_and_advance("approach_distance")
 
-    if st.button("Fairway Bunker", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "fairway_bunker"}
+    # HAZARDS
+    h1, h2 = st.columns(2)
+    if h1.button("Water", use_container_width=True):
+        st.session_state.shot = {"shot": shot_number(), "result": "water"}
         go("shot_direction")
 
-    o1, o2 = st.columns(2)
-    if o1.button("Water", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "water"}
+    if h2.button("OB", use_container_width=True):
+        st.session_state.shot = {"shot": shot_number(), "result": "out_of_bounds"}
         go("shot_direction")
-
-    if o2.button("OB", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "out_of_bounds"}
-        go("shot_direction")
-
-    if st.button("Back", use_container_width=True):
-        back()
 
 
 # =========================
@@ -190,43 +167,12 @@ elif st.session_state.page == "approach_distance":
         "Distance to hole (yards)", 0, 400, 50, step=1
     )
 
-    c1, c2 = st.columns(2)
-    if c1.button("Back", use_container_width=True):
-        back()
-    if c2.button("Next", use_container_width=True):
+    if st.button("Next", use_container_width=True):
         go("shot_result")
 
 
 # =========================
-# SHOT DIRECTION
-# =========================
-elif st.session_state.page == "shot_direction":
-    st.caption(progress())
-
-    d1, d2, d3, d4 = st.columns(4)
-    if d1.button("Left", use_container_width=True):
-        st.session_state.shot["direction"] = "left"
-        save_shot()
-        go("approach_distance")
-    if d2.button("Right", use_container_width=True):
-        st.session_state.shot["direction"] = "right"
-        save_shot()
-        go("approach_distance")
-    if d3.button("Short", use_container_width=True):
-        st.session_state.shot["direction"] = "short"
-        save_shot()
-        go("approach_distance")
-    if d4.button("Long", use_container_width=True):
-        st.session_state.shot["direction"] = "long"
-        save_shot()
-        go("approach_distance")
-
-    if st.button("Back", use_container_width=True):
-        back()
-
-
-# =========================
-# PUTTING DISTANCE
+# PUTTING
 # =========================
 elif st.session_state.page == "putt_distance":
     st.caption(progress())
@@ -235,47 +181,36 @@ elif st.session_state.page == "putt_distance":
         "Putt distance (feet)", 0, 100, 15, step=1
     )
 
-    c1, c2 = st.columns(2)
-    if c1.button("Back", use_container_width=True):
-        back()
-    if c2.button("Next", use_container_width=True):
+    if st.button("Next", use_container_width=True):
         go("putt_result")
 
 
-# =========================
-# PUTT RESULT
-# =========================
 elif st.session_state.page == "putt_result":
     st.caption(progress())
 
     c1, c2, c3 = st.columns(3)
     if c2.button("Long", use_container_width=True):
         st.session_state.shot["result"] = "long"
-        save_shot()
-        go("putt_distance")
+        save_shot_and_advance("putt_distance")
 
     c1, c2, c3 = st.columns(3)
     if c1.button("Left", use_container_width=True):
         st.session_state.shot["result"] = "left"
-        save_shot()
-        go("putt_distance")
+        save_shot_and_advance("putt_distance")
+
     if c2.button("Hole", use_container_width=True):
         st.session_state.shot["result"] = "hole"
-        save_shot()
+        st.session_state.hole["shots"].append(st.session_state.shot)
         finish_hole()
+
     if c3.button("Right", use_container_width=True):
         st.session_state.shot["result"] = "right"
-        save_shot()
-        go("putt_distance")
+        save_shot_and_advance("putt_distance")
 
     c1, c2, c3 = st.columns(3)
     if c2.button("Short", use_container_width=True):
         st.session_state.shot["result"] = "short"
-        save_shot()
-        go("putt_distance")
-
-    if st.button("Back", use_container_width=True):
-        back()
+        save_shot_and_advance("putt_distance")
 
 
 # =========================
