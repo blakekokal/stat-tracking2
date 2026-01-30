@@ -1,129 +1,5 @@
 import streamlit as st
-from dataclasses import dataclass, field
-from typing import List, Optional
 import pandas as pd
-
-# ------------------------------
-# Data Models
-# ------------------------------
-@dataclass
-class Shot:
-    shot_number: int
-    distance: Optional[int]  # yards
-    start_lie: str
-    end_lie: str
-    distance_to_hole: Optional[int] = None  # for putts
-
-    def is_putt(self):
-        return self.start_lie == "green"
-
-    def category(self):
-        if self.is_putt():
-            return "putting"
-        if self.shot_number == 1:
-            return "tee"
-        if self.distance and self.distance > 100:
-            return "approach"
-        return "short_game"
-
-    def direction(self):
-        for d in ["left", "right", "short", "long"]:
-            if d in self.end_lie:
-                return d
-        if self.end_lie in ["fairway", "green"]:
-            return "center"
-        if self.end_lie == "hole":
-            return "hole"
-        return "unknown"
-
-@dataclass
-class Hole:
-    hole_number: int
-    par: int
-    yardage: int
-    shots: List[Shot] = field(default_factory=list)
-
-    def strokes(self):
-        return len(self.shots)
-
-    def putts(self):
-        return sum(s.is_putt() for s in self.shots)
-
-    def fairway_result(self):
-        if self.par < 4 or len(self.shots) == 0:
-            return None
-        return self.shots[0].direction()
-
-    def gir(self):
-        for i, s in enumerate(self.shots):
-            if s.end_lie == "green":
-                return (i + 1) <= (self.par - 2)
-        return False
-
-@dataclass
-class Round:
-    player_name: str
-    course_name: str
-    holes_played: int
-    course_par: int
-    holes: List[Hole] = field(default_factory=list)
-
-    def total_score(self):
-        return sum(h.strokes() for h in self.holes)
-
-    def score_vs_par(self):
-        return self.total_score() - self.course_par
-
-    def total_putts(self):
-        return sum(h.putts() for h in self.holes)
-
-    def fairway_stats(self):
-        results = [h.fairway_result() for h in self.holes if h.fairway_result()]
-        return pd.Series(results).value_counts()
-
-    def gir_stats(self):
-        hits = sum(h.gir() for h in self.holes)
-        return hits, len(self.holes)
-
-    def directional_bias(self):
-        dirs = []
-        for h in self.holes:
-            for s in h.shots:
-                d = s.direction()
-                if d not in ["center", "hole"]:
-                    dirs.append(d)
-        return pd.Series(dirs).value_counts()
-
-    def strokes_by_category(self):
-        buckets = {"tee":0,"approach":0,"short_game":0,"putting":0}
-        for h in self.holes:
-            for s in h.shots:
-                buckets[s.category()] +=1
-        return buckets
-
-    def to_dataframe(self):
-        rows = []
-        for h in self.holes:
-            for s in h.shots:
-                rows.append([
-                    self.player_name,
-                    self.course_name,
-                    h.hole_number,
-                    h.par,
-                    h.yardage,
-                    s.shot_number,
-                    s.distance,
-                    s.start_lie,
-                    s.end_lie,
-                    s.distance_to_hole,
-                    s.category(),
-                    s.direction()
-                ])
-        return pd.DataFrame(rows, columns=[
-            "Player","Course","Hole","Par","Hole_Yardage",
-            "Shot#","Distance","Start_Lie","End_Lie",
-            "Distance_to_Hole","Category","Direction"
-        ])
 
 # ------------------------------
 # Initialize session state
@@ -133,36 +9,74 @@ for key, default in [
     ("current_hole", 1),
     ("current_shot", 1),
     ("current_hole_obj", None),
-    ("hole_pars", {}),
-    ("hole_yardages", {})
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
 
 # ------------------------------
+# Helper Functions
+# ------------------------------
+MAIN_LIES = ["fairway", "rough", "bunker", "water", "green", "hole"]
+
+def start_new_round(player_name, course_name, holes_played, course_par):
+    st.session_state.round = {
+        "player_name": player_name,
+        "course_name": course_name,
+        "holes_played": holes_played,
+        "course_par": course_par,
+        "holes": []
+    }
+
+def add_shot(distance, start_lie, end_lie, distance_to_hole):
+    shot = {
+        "shot_number": st.session_state.current_shot,
+        "distance": distance,
+        "start_lie": start_lie,
+        "end_lie": end_lie,
+        "distance_to_hole": distance_to_hole
+    }
+    st.session_state.current_hole_obj["shots"].append(shot)
+
+def finish_hole():
+    st.session_state.round["holes"].append(st.session_state.current_hole_obj)
+    st.session_state.current_hole += 1
+    st.session_state.current_shot = 1
+    st.session_state.current_hole_obj = None
+
+def go_back_shot():
+    if st.session_state.current_shot > 1:
+        st.session_state.current_hole_obj["shots"].pop()
+        st.session_state.current_shot -= 1
+    else:
+        if st.session_state.current_hole > 1:
+            st.session_state.current_hole -= 1
+            prev_hole = st.session_state.round["holes"].pop()
+            st.session_state.current_hole_obj = prev_hole
+            st.session_state.current_shot = len(prev_hole["shots"])
+
+# ------------------------------
 # App UI
 # ------------------------------
-st.title("Golf Stat Tracker - Stepwise Shot Entry")
-MAIN_LIES = ["fairway", "rough", "bunker", "water", "green", "hole"]
+st.title("Golf Stat Tracker")
 
 # ------------------------------
 # Round Setup
 # ------------------------------
 if st.session_state.round is None:
     st.header("Round Setup")
-    player = st.text_input("Player Name", key="player")
-    course = st.text_input("Course Name", key="course")
+    player = st.text_input("Player Name")
+    course = st.text_input("Course Name")
     holes_played = st.number_input("Holes Played", min_value=1, max_value=18, value=18, step=1)
     course_par = st.number_input("Course Par", min_value=9, max_value=72, value=holes_played*4, step=1)
-
     if player and course:
-        st.session_state.round = Round(player, course, holes_played, course_par)
+        if st.button("Start Round"):
+            start_new_round(player, course, holes_played, course_par)
+            st.experimental_rerun()
 
 # ------------------------------
 # Hole & Shot Entry
 # ------------------------------
-elif st.session_state.current_hole <= st.session_state.round.holes_played:
-    rnd = st.session_state.round
+elif st.session_state.current_hole <= st.session_state.round["holes_played"]:
     hole_num = st.session_state.current_hole
 
     # Hole setup
@@ -171,36 +85,33 @@ elif st.session_state.current_hole <= st.session_state.round.holes_played:
         par = st.number_input(f"Hole {hole_num} Par", min_value=3, max_value=5, step=1, key=f"par{hole_num}")
         yardage = st.number_input(f"Hole {hole_num} Yardage", min_value=50, max_value=800, step=1, key=f"yard{hole_num}")
         if st.button("Start Hole"):
-            st.session_state.current_hole_obj = Hole(hole_num, par, yardage)
+            st.session_state.current_hole_obj = {
+                "hole_number": hole_num,
+                "par": par,
+                "yardage": yardage,
+                "shots": []
+            }
             st.session_state.current_shot = 1
             st.experimental_rerun()
 
-    # Shot entry with buttons + progress + go back
+    # Shot entry
     else:
         shot_num = st.session_state.current_shot
         st.subheader(f"Hole {hole_num} - Shot {shot_num}")
-        st.caption(f"Progress: Hole {hole_num} of {st.session_state.round.holes_played}, Shot {shot_num}")
+        st.caption(f"Progress: Hole {hole_num} of {st.session_state.round['holes_played']}, Shot {shot_num}")
 
-        start_lie = "tee" if shot_num==1 else st.session_state.current_hole_obj.shots[-1].end_lie
+        start_lie = "tee" if shot_num==1 else st.session_state.current_hole_obj["shots"][-1]["end_lie"]
         distance = None
         distance_to_hole = None
 
-        # Go Back button
+        # Go back button
         col1, col2 = st.columns([1,3])
         with col1:
             if st.button("Go Back / Edit Last Shot"):
-                if shot_num > 1:
-                    st.session_state.current_hole_obj.shots.pop()
-                    st.session_state.current_shot -= 1
-                else:
-                    if st.session_state.current_hole > 1:
-                        st.session_state.current_hole -= 1
-                        prev_hole = st.session_state.round.holes.pop()
-                        st.session_state.current_hole_obj = prev_hole
-                        st.session_state.current_shot = len(prev_hole.shots)
+                go_back_shot()
                 st.experimental_rerun()
 
-        # Distance input
+        # Distance input for non-putts
         if start_lie != "green":
             distance = st.number_input("Shot distance (yards)", min_value=0, step=1, format="%d", key=f"dist_{hole_num}_{shot_num}")
 
@@ -228,17 +139,10 @@ elif st.session_state.current_hole <= st.session_state.round.holes_played:
             elif end_lie == "green":
                 distance_to_hole = st.number_input("Distance from hole (ft)", min_value=0, step=1, format="%d", key=f"puttdist_{hole_num}_{shot_num}")
 
-            # Save shot
-            st.session_state.current_hole_obj.shots.append(
-                Shot(shot_num, distance, start_lie, end_lie, distance_to_hole)
-            )
+            add_shot(distance, start_lie, end_lie, distance_to_hole)
 
-            # Move to next shot or hole
             if end_lie == "hole":
-                st.session_state.round.holes.append(st.session_state.current_hole_obj)
-                st.session_state.current_hole += 1
-                st.session_state.current_shot = 1
-                st.session_state.current_hole_obj = None
+                finish_hole()
             else:
                 st.session_state.current_shot += 1
 
@@ -247,45 +151,44 @@ elif st.session_state.current_hole <= st.session_state.round.holes_played:
 # ------------------------------
 # Round Summary & Export
 # ------------------------------
-elif st.session_state.current_hole > st.session_state.round.holes_played:
+elif st.session_state.current_hole > st.session_state.round["holes_played"]:
     rnd = st.session_state.round
     st.header("🏁 Round Summary")
 
-    fw = rnd.fairway_stats()
-    gir_hit, gir_total = rnd.gir_stats()
-    bias = rnd.directional_bias()
-    sg = rnd.strokes_by_category()
+    # Convert shots to DataFrame
+    rows = []
+    for h in rnd["holes"]:
+        for s in h["shots"]:
+            rows.append([
+                rnd["player_name"],
+                rnd["course_name"],
+                h["hole_number"],
+                h["par"],
+                h["yardage"],
+                s["shot_number"],
+                s["distance"],
+                s["start_lie"],
+                s["end_lie"],
+                s["distance_to_hole"]
+            ])
+    df = pd.DataFrame(rows, columns=[
+        "Player","Course","Hole","Par","Hole_Yardage","Shot#",
+        "Distance","Start_Lie","End_Lie","Distance_to_Hole"
+    ])
 
     # Score
+    total_score = df.groupby("Hole")["Shot#"].max().sum()
     st.subheader("Score")
-    st.metric("Total Score", rnd.total_score())
-    st.metric("Score vs Par", rnd.score_vs_par())
+    st.metric("Total Score", total_score)
+    st.metric("Score vs Par", total_score - rnd["course_par"])
 
-    # Fairways
-    st.subheader("Fairways")
-    st.write(f"Hit (Center): {fw.get('center',0)}, Left: {fw.get('left',0)}, Right: {fw.get('right',0)}")
-
-    # GIR
-    st.subheader("Greens in Regulation")
-    st.write(f"{gir_hit}/{gir_total} ({round((gir_hit/gir_total)*100,1)}%)")
-
-    # Putting
-    st.subheader("Putting")
-    st.write(f"Total Putts: {rnd.total_putts()}")
-    st.write(f"Putts per Hole: {round(rnd.total_putts()/len(rnd.holes),2) if len(rnd.holes) else 0}")
-    st.write(f"Putts per GIR: {round(rnd.total_putts()/gir_hit,2) if gir_hit else 'N/A'}")
-
-    # Miss tendency
-    st.subheader("Miss Tendency")
-    st.write(bias if not bias.empty else "No misses")
-
-    # Shots by category
-    st.subheader("Shots by Category")
-    st.write(sg)
+    # Fairways hit
+    fw = df[df["Hole_Yardage"] >= 200].iloc[::1]  # approximate for demonstration
+    st.subheader("Shots Table")
+    st.dataframe(df)
 
     # Export
     st.subheader("Export Round Data")
-    df = rnd.to_dataframe()
     excel_file = "round.xlsx"
     df.to_excel(excel_file, index=False)
     with open(excel_file,"rb") as f:
