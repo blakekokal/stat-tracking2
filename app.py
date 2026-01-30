@@ -86,7 +86,7 @@ elif st.session_state.page == "hole_setup":
 
 
 # =========================
-# SHOT RESULT (TEE SHOT OR OFF-GREEN)
+# SHOT RESULT (TEE OR OFF-GREEN)
 # =========================
 elif st.session_state.page == "shot_result":
     st.caption(progress())
@@ -125,13 +125,11 @@ elif st.session_state.page == "shot_result":
 # =========================
 elif st.session_state.page == "approach_distance":
     st.caption(progress())
-    st.subheader("How far to the hole?")
+    st.subheader(f"Shot {shot_number()} – distance to hole")
 
     st.session_state.shot = {
         "shot_number": shot_number(),
-        "distance_to_hole": st.number_input(
-            "Yards to hole", 0, 400, 150, step=1
-        )
+        "distance_to_hole": st.number_input("Yards", 0, 400, 150, step=1)
     }
 
     st.button("Next", use_container_width=True, on_click=lambda: go("shot_result"))
@@ -163,9 +161,7 @@ elif st.session_state.page == "putt_distance":
 
     st.session_state.shot = {
         "shot_number": shot_number(),
-        "putt_distance": st.number_input(
-            "Feet from hole", 0, 100, 15, step=1
-        )
+        "putt_distance": st.number_input("Feet from hole", 0, 100, 15, step=1)
     }
 
     st.button("Next", use_container_width=True, on_click=lambda: go("putt_result"))
@@ -193,8 +189,128 @@ elif st.session_state.page == "putt_result":
 
 
 # =========================
-# SUMMARY
+# SUMMARY / STATS
 # =========================
 elif st.session_state.page == "summary":
-    st.title("Round Complete 🏁")
-    st.json(st.session_state.round)
+    st.title("Round Stats Recap 📊")
+
+    holes = st.session_state.round["holes"]
+    holes_played = len(holes)
+
+    # ---------- FAIRWAYS (Par 4 & 5) ----------
+    fw_holes = [h for h in holes if h["par"] in (4, 5)]
+    fw_total = len(fw_holes)
+    fw_hit = 0
+    fw_miss = {"left": 0, "right": 0, "short": 0, "long": 0}
+
+    for h in fw_holes:
+        tee = h["shots"][0]
+        if tee["result"] == "fairway":
+            fw_hit += 1
+        else:
+            for d in fw_miss:
+                if d in tee.get("direction", ""):
+                    fw_miss[d] += 1
+
+    st.subheader("Fairways Hit (Par 4s & 5s)")
+    st.write(f"**{fw_hit}/{fw_total}**")
+    if fw_total:
+        st.write(f"Hit %: {fw_hit/fw_total:.1%}")
+        for d in fw_miss:
+            st.write(f"{d.title()} %: {fw_miss[d]/fw_total:.1%}")
+
+    # ---------- GREENS IN REGULATION ----------
+    gir = 0
+    gir_holes = set()
+    gir_miss = {"left": 0, "right": 0, "short": 0, "long": 0}
+
+    for h in holes:
+        par = h["par"]
+        green_shot = None
+
+        for i, s in enumerate(h["shots"], start=1):
+            if s.get("result") == "green":
+                green_shot = i
+                break
+
+        if green_shot and green_shot <= par - 2:
+            gir += 1
+            gir_holes.add(h["hole_number"])
+        else:
+            last = h["shots"][-1]
+            for d in gir_miss:
+                if d in last.get("direction", ""):
+                    gir_miss[d] += 1
+
+    st.subheader("Greens in Regulation")
+    st.write(f"**{gir}/{holes_played}**")
+    if holes_played:
+        st.write(f"GIR %: {gir/holes_played:.1%}")
+        for d in gir_miss:
+            st.write(f"{d.title()} %: {gir_miss[d]/holes_played:.1%}")
+
+    # ---------- PUTTING ----------
+    total_putts = 0
+    first_putts = []
+    first_putts_gir = []
+    first_putts_no_gir = []
+
+    for h in holes:
+        putts = [s for s in h["shots"] if "putt_distance" in s]
+        total_putts += len(putts)
+
+        if putts:
+            first = putts[0]["putt_distance"]
+            first_putts.append(first)
+
+            if h["hole_number"] in gir_holes:
+                first_putts_gir.append(first)
+            else:
+                first_putts_no_gir.append(first)
+
+    putts_per_hole = total_putts / holes_played if holes_played else 0
+    putts_per_gir = total_putts / len(gir_holes) if gir_holes else 0
+
+    st.subheader("Putting")
+    st.write(f"Total Putts: **{total_putts}**")
+    st.write(f"Putts per Hole: **{putts_per_hole:.2f}**")
+    st.write(f"Putts per GIR: **{putts_per_gir:.2f}**")
+
+    if first_putts:
+        st.write(f"Avg First Putt Distance: **{sum(first_putts)/len(first_putts):.1f} ft**")
+    if first_putts_gir:
+        st.write(f"Avg First Putt Distance (GIR): **{sum(first_putts_gir)/len(first_putts_gir):.1f} ft**")
+    if first_putts_no_gir:
+        st.write(f"Avg First Putt Distance (No GIR): **{sum(first_putts_no_gir)/len(first_putts_no_gir):.1f} ft**")
+
+    # ---------- DISTANCE STATS ----------
+    par4_approach = []
+    par3_tee = []
+    par5_approach = []
+
+    for h in holes:
+        shots = h["shots"]
+
+        if h["par"] == 4 and len(shots) >= 2:
+            d = shots[1].get("distance_to_hole")
+            if d is not None:
+                par4_approach.append(d)
+
+        if h["par"] == 3 and shots:
+            d = shots[0].get("distance_to_hole")
+            if d is not None:
+                par3_tee.append(d)
+
+        if h["par"] == 5:
+            for s in shots[1:]:
+                if "distance_to_hole" in s:
+                    par5_approach.append(s["distance_to_hole"])
+                    break
+
+    st.subheader("Distance Averages")
+    if par4_approach:
+        st.write(f"Avg 2nd Shot (Par 4): **{sum(par4_approach)/len(par4_approach):.1f} yds**")
+    if par3_tee:
+        st.write(f"Avg Tee Shot (Par 3): **{sum(par3_tee)/len(par3_tee):.1f} yds**")
+    if par5_approach:
+        st.write(f"Avg Approach (Par 5): **{sum(par5_approach)/len(par5_approach):.1f} yds**")
