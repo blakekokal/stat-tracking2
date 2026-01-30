@@ -71,7 +71,7 @@ if st.session_state.round is None:
     if player and course:
         if st.button("Start Round"):
             start_new_round(player, course, holes_played, course_par)
-            st.experimental_rerun()
+            st.experimental_rerun()  # only here, safe on setup
 
 # ------------------------------
 # Hole & Shot Entry
@@ -92,7 +92,6 @@ elif st.session_state.current_hole <= st.session_state.round["holes_played"]:
                 "shots": []
             }
             st.session_state.current_shot = 1
-            st.experimental_rerun()
 
     # Shot entry
     else:
@@ -105,48 +104,36 @@ elif st.session_state.current_hole <= st.session_state.round["holes_played"]:
         distance_to_hole = None
 
         # Go back button
-        col1, col2 = st.columns([1,3])
-        with col1:
-            if st.button("Go Back / Edit Last Shot"):
-                go_back_shot()
-                st.experimental_rerun()
+        if st.button("Go Back / Edit Last Shot"):
+            go_back_shot()
 
         # Distance input for non-putts
         if start_lie != "green":
-            distance = st.number_input("Shot distance (yards)", min_value=0, step=1, format="%d", key=f"dist_{hole_num}_{shot_num}")
+            distance = st.number_input("Shot distance (yards)", min_value=0, step=1, format="%d")
 
-        # Shot buttons
-        st.write("Where did the ball go?")
-        cols = st.columns(len(MAIN_LIES))
-        clicked_lie = None
-        for i, lie in enumerate(MAIN_LIES):
-            if cols[i].button(lie.capitalize(), key=f"btn_{hole_num}_{shot_num}_{lie}"):
-                clicked_lie = lie
+        # Shot lie selection
+        clicked_lie = st.radio("Where did the ball go?", MAIN_LIES)
 
-        if clicked_lie:
-            end_lie = clicked_lie
+        # Stepwise side selection
+        if clicked_lie == "rough":
+            side = st.radio("Which rough?", ["left rough","right rough","short rough","long rough"])
+            clicked_lie = side
+        elif clicked_lie == "bunker":
+            side = st.radio("Which bunker?", ["left bunker","right bunker","fairway bunker"])
+            clicked_lie = side
+        elif clicked_lie == "water":
+            side = st.radio("Which water?", ["left water","right water","long water"])
+            clicked_lie = side
+        elif clicked_lie == "green":
+            distance_to_hole = st.number_input("Distance from hole (ft)", min_value=0, step=1, format="%d")
 
-            # Stepwise side selection
-            if end_lie == "rough":
-                side = st.radio("Which rough?", ["left rough","right rough","short rough","long rough"], key=f"rough_{hole_num}_{shot_num}")
-                end_lie = side
-            elif end_lie == "bunker":
-                side = st.radio("Which bunker?", ["left bunker","right bunker","fairway bunker"], key=f"bunker_{hole_num}_{shot_num}")
-                end_lie = side
-            elif end_lie == "water":
-                side = st.radio("Which water?", ["left water","right water","long water"], key=f"water_{hole_num}_{shot_num}")
-                end_lie = side
-            elif end_lie == "green":
-                distance_to_hole = st.number_input("Distance from hole (ft)", min_value=0, step=1, format="%d", key=f"puttdist_{hole_num}_{shot_num}")
-
-            add_shot(distance, start_lie, end_lie, distance_to_hole)
-
-            if end_lie == "hole":
+        # Confirm shot button
+        if st.button("Confirm Shot"):
+            add_shot(distance, start_lie, clicked_lie, distance_to_hole)
+            if clicked_lie == "hole":
                 finish_hole()
             else:
                 st.session_state.current_shot += 1
-
-            st.experimental_rerun()
 
 # ------------------------------
 # Round Summary & Export
@@ -182,8 +169,6 @@ elif st.session_state.current_hole > st.session_state.round["holes_played"]:
     st.metric("Total Score", total_score)
     st.metric("Score vs Par", total_score - rnd["course_par"])
 
-    # Fairways hit
-    fw = df[df["Hole_Yardage"] >= 200].iloc[::1]  # approximate for demonstration
     st.subheader("Shots Table")
     st.dataframe(df)
 
