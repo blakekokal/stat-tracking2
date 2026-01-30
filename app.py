@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from datetime import date
 
 # =========================
 # SESSION STATE INIT
@@ -62,11 +63,35 @@ def back():
 
 
 # =========================
+# STROKES GAINED BASELINE
+# =========================
+def expected_strokes(distance_yards=None, putt_feet=None, handicap=0):
+    adj = handicap * 0.05
+
+    if putt_feet is not None:
+        return max(0.5, (putt_feet * 0.05) + adj)
+
+    if distance_yards is None:
+        return 0
+
+    if distance_yards > 200:
+        return 3.2 + adj
+    if distance_yards > 150:
+        return 3.0 + adj
+    if distance_yards > 100:
+        return 2.8 + adj
+    if distance_yards > 50:
+        return 2.3 + adj
+    return 1.8 + adj
+
+
+# =========================
 # ROUND SETUP
 # =========================
 if st.session_state.page == "round":
     st.title("Golf Stat Tracker")
 
+    st.session_state.round["date"] = st.date_input("Round Date", value=date.today())
     st.session_state.round["player"] = st.text_input("Player Name")
     st.session_state.round["course"] = st.text_input("Course Name")
     st.session_state.round["holes_played"] = st.number_input("Holes Played", 1, 18, 18)
@@ -80,35 +105,18 @@ if st.session_state.page == "round":
 # =========================
 elif st.session_state.page == "hole_setup":
     st.subheader(f"Hole {st.session_state.hole_index} Setup")
-    st.write("Select Hole Par")
 
     p1, p2, p3 = st.columns(3)
-
-    if p1.button("Par 3", use_container_width=True):
-        st.session_state.temp_par = 3
-        st.session_state.temp_yardage = 170
-    if p2.button("Par 4", use_container_width=True):
-        st.session_state.temp_par = 4
-        st.session_state.temp_yardage = 400
-    if p3.button("Par 5", use_container_width=True):
-        st.session_state.temp_par = 5
-        st.session_state.temp_yardage = 520
+    if p1.button("Par 3"): st.session_state.temp_par, st.session_state.temp_yardage = 3, 170
+    if p2.button("Par 4"): st.session_state.temp_par, st.session_state.temp_yardage = 4, 400
+    if p3.button("Par 5"): st.session_state.temp_par, st.session_state.temp_yardage = 5, 520
 
     if st.session_state.temp_par:
         st.session_state.temp_yardage = st.number_input(
             "Hole Yardage (yards)", 50, 800, st.session_state.temp_yardage, step=1
         )
 
-        c1, c2 = st.columns(2)
-        if c1.button("⬅ Back", use_container_width=True):
-            st.session_state.temp_par = None
-            st.session_state.temp_yardage = None
-            if st.session_state.hole_index > 1:
-                st.session_state.hole_index -= 1
-                st.session_state.round["holes"].pop()
-            go("hole_setup")
-
-        if c2.button("Confirm Hole", use_container_width=True):
+        if st.button("Confirm Hole", use_container_width=True):
             st.session_state.hole = {
                 "hole_number": st.session_state.hole_index,
                 "par": st.session_state.temp_par,
@@ -116,7 +124,6 @@ elif st.session_state.page == "hole_setup":
                 "shots": []
             }
             st.session_state.temp_par = None
-            st.session_state.temp_yardage = None
             go("shot_result")
 
 
@@ -198,9 +205,7 @@ elif st.session_state.page == "approach_distance":
         "distance_to_hole": st.number_input("Yards", 0, 400, 150, step=1)
     }
 
-    c1, c2 = st.columns(2)
-    c1.button("⬅ Back", use_container_width=True, on_click=back)
-    c2.button("Next", use_container_width=True, on_click=lambda: go("shot_result"))
+    st.button("Next", use_container_width=True, on_click=lambda: go("shot_result"))
 
 
 # =========================
@@ -236,8 +241,6 @@ elif st.session_state.page == "shot_direction":
                   go("approach_distance")
               ))
 
-    st.button("⬅ Back", use_container_width=True, on_click=back)
-
 
 # =========================
 # PUTTING DISTANCE
@@ -251,9 +254,7 @@ elif st.session_state.page == "putt_distance":
         "putt_distance": st.number_input("Feet", 0, 100, 15, step=1)
     }
 
-    c1, c2 = st.columns(2)
-    c1.button("⬅ Back", use_container_width=True, on_click=back)
-    c2.button("Next", use_container_width=True, on_click=lambda: go("putt_result"))
+    st.button("Next", use_container_width=True, on_click=lambda: go("putt_result"))
 
 
 # =========================
@@ -263,139 +264,51 @@ elif st.session_state.page == "putt_result":
     st.caption(progress())
     st.subheader("Where did the putt go?")
 
-    c1, c2, c3 = st.columns(3)
-    c2.button("Long", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.shot.update({"result": "long"}),
-                  save_shot(),
-                  go("putt_distance")
-              ))
-
-    c1, c2, c3 = st.columns(3)
-    c1.button("Left", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.shot.update({"result": "left"}),
-                  save_shot(),
-                  go("putt_distance")
-              ))
-    c2.button("Hole", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.shot.update({"result": "hole"}),
-                  save_shot(),
-                  finish_hole()
-              ))
-    c3.button("Right", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.shot.update({"result": "right"}),
-                  save_shot(),
-                  go("putt_distance")
-              ))
-
-    c1, c2, c3 = st.columns(3)
-    c2.button("Short", use_container_width=True,
-              on_click=lambda: (
-                  st.session_state.shot.update({"result": "short"}),
-                  save_shot(),
-                  go("putt_distance")
-              ))
-
-    st.button("⬅ Back", use_container_width=True, on_click=back)
+    for label in ["Left", "Right", "Short", "Long", "Hole"]:
+        if st.button(label, use_container_width=True):
+            st.session_state.shot.update({"result": label.lower()})
+            save_shot()
+            if label == "Hole":
+                finish_hole()
+            else:
+                go("putt_distance")
 
 
 # =========================
-# SUMMARY + EXPORT
+# SUMMARY + STROKES GAINED
 # =========================
 elif st.session_state.page == "summary":
     st.title("Round Stats Recap 📊")
 
-    holes = st.session_state.round["holes"]
-    holes_played = len(holes)
+    handicap = st.number_input("Strokes Gained Baseline Handicap", -5.0, 20.0, 0.0, step=0.5)
 
-    rows = []
-    for h in holes:
-        for s in h["shots"]:
-            rows.append({
-                "hole": h["hole_number"],
-                "par": h["par"],
-                "hole_yardage": h["yardage"],
-                "shot_number": s.get("shot_number"),
-                "result": s.get("result"),
-                "direction": s.get("direction"),
-                "distance_to_hole": s.get("distance_to_hole"),
-                "putt_distance": s.get("putt_distance"),
-            })
+    sg = {"OTT": 0, "APP": 0, "SG": 0, "PUTT": 0}
 
-    df = pd.DataFrame(rows)
+    for h in st.session_state.round["holes"]:
+        shots = h["shots"]
 
-    total_shots = len(df)
-    total_par = sum(h["par"] for h in holes)
-    st.subheader("Score")
-    st.write(f"{total_shots} (Par {total_par}, {total_shots - total_par:+})")
+        for s in shots:
+            if "putt_distance" in s:
+                before = expected_strokes(putt_feet=s["putt_distance"], handicap=handicap)
+                after = 0 if s.get("result") == "hole" else expected_strokes(putt_feet=3, handicap=handicap)
+                sg["PUTT"] += before - (1 + after)
+                continue
 
-    # FAIRWAYS
-    fw_holes = [h for h in holes if h["par"] in (4, 5)]
-    fw_shots = [h["shots"][0] for h in fw_holes]
-    fw_hit = sum(1 for s in fw_shots if s["result"] == "fairway")
-    fw_left = sum(1 for s in fw_shots if s.get("direction") == "left")
-    fw_right = sum(1 for s in fw_shots if s.get("direction") == "right")
+            dist = s.get("distance_to_hole")
+            before = expected_strokes(distance_yards=dist, handicap=handicap)
+            after = expected_strokes(distance_yards=50, handicap=handicap)
 
-    st.subheader("Fairways Hit (Par 4 & 5)")
-    st.write(f"{fw_hit} / {len(fw_holes)} ({fw_hit / len(fw_holes) * 100:.1f}%)")
-    st.write(f"Miss Left: {fw_left} • Miss Right: {fw_right}")
+            cat = "APP"
+            if s["shot_number"] == 1:
+                cat = "OTT"
+            elif dist is not None and dist <= 100:
+                cat = "SG"
 
-    # GIR + PROXIMITY
-    gir = 0
-    miss_dir = {"left": 0, "right": 0, "short": 0, "long": 0}
-    first_putt = []
-    first_putt_gir = []
-    first_putt_miss = []
+            sg[cat] += before - (1 + after)
 
-    for h in holes:
-        putts = [s for s in h["shots"] if s.get("putt_distance") is not None]
-        if not putts:
-            continue
-
-        fp = putts[0]
-        first_putt.append(fp["putt_distance"])
-
-        if fp["shot_number"] <= h["par"] - 1:
-            gir += 1
-            first_putt_gir.append(fp["putt_distance"])
-        else:
-            first_putt_miss.append(fp["putt_distance"])
-            prev = h["shots"][fp["shot_number"] - 2]
-            if prev.get("direction") in miss_dir:
-                miss_dir[prev["direction"]] += 1
-
-    st.subheader("Greens in Regulation")
-    st.write(f"{gir} / {holes_played} ({gir / holes_played * 100:.1f}%)")
-    st.write(
-        f"Miss L/R/S/L: "
-        f"{miss_dir['left']} / {miss_dir['right']} / "
-        f"{miss_dir['short']} / {miss_dir['long']}"
-    )
-
-    st.subheader("Putting & Proximity")
-    st.write(f"Average First Putt: {sum(first_putt) / len(first_putt):.1f} ft")
-    if first_putt_gir:
-        st.write(f"Average Proximity (GIR): {sum(first_putt_gir) / len(first_putt_gir):.1f} ft")
-    if first_putt_miss:
-        st.write(f"Average Proximity (Missed Green): {sum(first_putt_miss) / len(first_putt_miss):.1f} ft")
-
-    # EXPORT
-    st.subheader("Export Round Data")
-
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇ Download CSV (Google Sheets)", csv, "round_data.csv", mime="text/csv")
-
-    try:
-        excel_buffer = BytesIO()
-        df.to_excel(excel_buffer, index=False)
-        st.download_button(
-            "⬇ Download Excel",
-            excel_buffer.getvalue(),
-            "round_data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    except Exception:
-        st.info("Excel export unavailable on this server. Use CSV or enable openpyxl.")
+    st.subheader("Strokes Gained")
+    st.write(f"Off the Tee: {sg['OTT']:+.2f}")
+    st.write(f"Approach: {sg['APP']:+.2f}")
+    st.write(f"Short Game: {sg['SG']:+.2f}")
+    st.write(f"Putting: {sg['PUTT']:+.2f}")
+    st.write(f"Total: {sum(sg.values()):+.2f}")
