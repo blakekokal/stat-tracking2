@@ -130,8 +130,9 @@ elif st.session_state.page == "shot_result":
                 go("shot_direction")
 
             elif key == "greenside_bunker":
-                st.session_state.on_green = True
-                go("putt_distance")
+                # NOT on the green → still needs distance
+                save_shot()
+                go("approach_distance")
 
             elif key == "hole":
                 save_shot()
@@ -155,7 +156,7 @@ elif st.session_state.page == "approach_distance":
 
     st.session_state.shot = {
         "shot_number": shot_number(),
-        "distance_to_hole": st.number_input("Yards", 0, 400, 150, step=1)
+        "distance_to_hole": st.number_input("Yards", 0, 400, 50, step=1)
     }
 
     col1, col2 = st.columns(2)
@@ -183,7 +184,7 @@ elif st.session_state.page == "shot_direction":
 
 
 # =========================
-# PUTTING DISTANCE
+# PUTTING DISTANCE (ONLY AFTER GREEN)
 # =========================
 elif st.session_state.page == "putt_distance":
     st.caption(progress())
