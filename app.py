@@ -5,22 +5,16 @@ import streamlit as st
 # =========================
 if "page" not in st.session_state:
     st.session_state.page = "round"
-
 if "round" not in st.session_state:
     st.session_state.round = {"holes": []}
-
 if "hole_index" not in st.session_state:
     st.session_state.hole_index = 1
-
 if "hole" not in st.session_state:
     st.session_state.hole = {}
-
 if "shot" not in st.session_state:
     st.session_state.shot = {}
-
 if "temp_par" not in st.session_state:
     st.session_state.temp_par = None
-
 if "temp_yardage" not in st.session_state:
     st.session_state.temp_yardage = None
 
@@ -54,13 +48,15 @@ def finish_hole():
 
 
 def back():
-    transitions = {
-        "approach_distance": "shot_result",
-        "shot_direction": "shot_result",
-        "putt_distance": "shot_result",
-        "putt_result": "putt_distance",
-    }
-    go(transitions.get(st.session_state.page, "shot_result"))
+    page = st.session_state.page
+    if page in ["approach_distance", "shot_direction", "putt_distance"]:
+        go("shot_result")
+    elif page == "putt_result":
+        go("putt_distance")
+    elif page == "shot_result":
+        go("hole_setup")
+    else:
+        go("shot_result")
 
 
 # =========================
@@ -82,32 +78,26 @@ if st.session_state.page == "round":
 # =========================
 elif st.session_state.page == "hole_setup":
     st.subheader(f"Hole {st.session_state.hole_index} Setup")
-
     st.write("Select Hole Par")
+
     p1, p2, p3 = st.columns(3)
 
     if p1.button("Par 3", use_container_width=True):
         st.session_state.temp_par = 3
         st.session_state.temp_yardage = 170
-
     if p2.button("Par 4", use_container_width=True):
         st.session_state.temp_par = 4
         st.session_state.temp_yardage = 400
-
     if p3.button("Par 5", use_container_width=True):
         st.session_state.temp_par = 5
         st.session_state.temp_yardage = 520
 
     if st.session_state.temp_par:
         st.session_state.temp_yardage = st.number_input(
-            "Hole Yardage (yards)",
-            50, 800,
-            st.session_state.temp_yardage,
-            step=1
+            "Hole Yardage (yards)", 50, 800, st.session_state.temp_yardage, step=1
         )
 
         c1, c2 = st.columns(2)
-
         if c1.button("⬅ Back", use_container_width=True):
             st.session_state.temp_par = None
             st.session_state.temp_yardage = None
@@ -136,56 +126,46 @@ elif st.session_state.page == "shot_result":
     st.subheader("Tap where the ball finished")
 
     # HOLE (top)
-    st.button(
-        "HOLE",
-        use_container_width=True,
-        on_click=lambda: (
-            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "hole"}}),
-            save_shot(),
-            finish_hole()
-        )
-    )
+    st.button("HOLE", use_container_width=True,
+              on_click=lambda: (
+                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "hole"}}),
+                  save_shot(),
+                  finish_hole()
+              ))
 
     # GREEN
     st.markdown("### Green")
-    st.button(
-        "Green",
-        use_container_width=True,
-        on_click=lambda: (
-            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "green"}}),
-            go("putt_distance")
-        )
-    )
-
-    st.button(
-        "Greenside Bunker",
-        use_container_width=True,
-        on_click=lambda: (
-            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "greenside_bunker"}}),
-            save_shot(),
-            go("approach_distance")
-        )
-    )
-
-    # FAIRWAY
-    st.markdown("### Fairway")
-    f1, f2, f3 = st.columns(3)
-
-    f1.button("Left Rough", use_container_width=True,
+    st.button("Green", use_container_width=True,
               on_click=lambda: (
-                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "rough", "direction": "left"}}),
+                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "green"}}),
+                  go("putt_distance")
+              ))
+
+    st.button("Greenside Bunker", use_container_width=True,
+              on_click=lambda: (
+                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "greenside_bunker"}}),
                   save_shot(),
                   go("approach_distance")
               ))
 
-    f2.button("Fairway", use_container_width=True,
+    # FAIRWAY (big fairway on top)
+    st.markdown("### Fairway")
+
+    st.button("Fairway", use_container_width=True,
               on_click=lambda: (
                   st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway"}}),
                   save_shot(),
                   go("approach_distance")
               ))
 
-    f3.button("Right Rough", use_container_width=True,
+    r1, r2 = st.columns(2)
+    r1.button("Left Rough", use_container_width=True,
+              on_click=lambda: (
+                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "rough", "direction": "left"}}),
+                  save_shot(),
+                  go("approach_distance")
+              ))
+    r2.button("Right Rough", use_container_width=True,
               on_click=lambda: (
                   st.session_state.update({"shot": {"shot_number": shot_number(), "result": "rough", "direction": "right"}}),
                   save_shot(),
@@ -193,25 +173,20 @@ elif st.session_state.page == "shot_result":
               ))
 
     c1, c2, c3 = st.columns([1, 2, 1])
-    c2.button(
-        "Fairway Bunker",
-        use_container_width=True,
-        on_click=lambda: (
-            st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway_bunker"}}),
-            go("shot_direction")
-        )
-    )
+    c2.button("Fairway Bunker", use_container_width=True,
+              on_click=lambda: (
+                  st.session_state.update({"shot": {"shot_number": shot_number(), "result": "fairway_bunker"}}),
+                  go("shot_direction")
+              ))
 
     # OTHER
     st.markdown("### Other")
     o1, o2 = st.columns(2)
-
     o1.button("Water", use_container_width=True,
               on_click=lambda: (
                   st.session_state.update({"shot": {"shot_number": shot_number(), "result": "water"}}),
                   go("shot_direction")
               ))
-
     o2.button("Out of Bounds", use_container_width=True,
               on_click=lambda: (
                   st.session_state.update({"shot": {"shot_number": shot_number(), "result": "out_of_bounds"}}),
@@ -246,7 +221,6 @@ elif st.session_state.page == "shot_direction":
     st.subheader("Which direction?")
 
     d1, d2, d3, d4 = st.columns(4)
-
     d1.button("Left", use_container_width=True,
               on_click=lambda: (
                   st.session_state.shot.update({"direction": "left"}),
@@ -293,13 +267,12 @@ elif st.session_state.page == "putt_distance":
 
 
 # =========================
-# PUTT RESULT (FINAL ORIENTATION)
+# PUTT RESULT
 # =========================
 elif st.session_state.page == "putt_result":
     st.caption(progress())
     st.subheader("Where did the putt go?")
 
-    # Long (top)
     c1, c2, c3 = st.columns(3)
     c2.button("Long", use_container_width=True,
               on_click=lambda: (
@@ -308,7 +281,6 @@ elif st.session_state.page == "putt_result":
                   go("putt_distance")
               ))
 
-    # Left / Hole / Right
     c1, c2, c3 = st.columns(3)
     c1.button("Left", use_container_width=True,
               on_click=lambda: (
@@ -329,7 +301,6 @@ elif st.session_state.page == "putt_result":
                   go("putt_distance")
               ))
 
-    # Short (bottom)
     c1, c2, c3 = st.columns(3)
     c2.button("Short", use_container_width=True,
               on_click=lambda: (
@@ -342,7 +313,7 @@ elif st.session_state.page == "putt_result":
 
 
 # =========================
-# SUMMARY / STATS
+# SUMMARY
 # =========================
 elif st.session_state.page == "summary":
     st.title("Round Stats Recap 📊")
