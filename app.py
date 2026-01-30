@@ -23,7 +23,7 @@ if "on_green" not in st.session_state:
 
 
 # =========================
-# Navigation Helpers
+# Helpers
 # =========================
 def go(page):
     st.session_state.page = page
@@ -44,8 +44,12 @@ def finish_hole():
         go("hole_setup")
 
 
-def progress_text():
-    return f"Hole {st.session_state.hole_index} of {st.session_state.round['holes_played']} • Shot {len(st.session_state.hole.get('shots', [])) + 1}"
+def shot_number():
+    return len(st.session_state.hole.get("shots", [])) + 1
+
+
+def progress():
+    return f"Hole {st.session_state.hole_index} of {st.session_state.round['holes_played']} • Shot {shot_number()}"
 
 
 # =========================
@@ -78,36 +82,25 @@ elif st.session_state.page == "hole_setup":
         "shots": []
     }
 
-    st.button("Confirm Hole", use_container_width=True, on_click=lambda: go("shot_distance"))
+    st.button("Confirm Hole", use_container_width=True, on_click=lambda: go("shot_result"))
 
 
 # =========================
-# SHOT DISTANCE (ONLY OFF GREEN)
-# =========================
-elif st.session_state.page == "shot_distance":
-    st.caption(progress_text())
-    st.subheader("How far did the shot go?")
-
-    st.session_state.shot = {
-        "distance": st.number_input("Yards", 0, 400, 150, step=1)
-    }
-
-    st.button("Next", use_container_width=True, on_click=lambda: go("shot_result"))
-
-
-# =========================
-# SHOT RESULT (OFF GREEN)
+# SHOT RESULT (TEE SHOT OR OFF-GREEN)
 # =========================
 elif st.session_state.page == "shot_result":
-    st.caption(progress_text())
-    st.subheader("Where did the ball go?")
+    st.caption(progress())
+    st.subheader("Where did the ball end up?")
 
     cols = st.columns(2)
     options = ["Fairway", "Rough", "Bunker", "Water", "Green", "Hole"]
 
     for i, opt in enumerate(options):
         def handler(choice=opt):
-            st.session_state.shot["result"] = choice.lower()
+            st.session_state.shot = {
+                "shot_number": shot_number(),
+                "result": choice.lower()
+            }
 
             if choice.lower() == "green":
                 st.session_state.on_green = True
@@ -122,16 +115,33 @@ elif st.session_state.page == "shot_result":
 
             else:  # fairway
                 save_shot()
-                go("shot_distance")
+                go("approach_distance")
 
         cols[i % 2].button(opt, use_container_width=True, on_click=handler)
 
 
 # =========================
-# SHOT DIRECTION (OFF GREEN)
+# APPROACH DISTANCE (SHOT 2+)
+# =========================
+elif st.session_state.page == "approach_distance":
+    st.caption(progress())
+    st.subheader("How far to the hole?")
+
+    st.session_state.shot = {
+        "shot_number": shot_number(),
+        "distance_to_hole": st.number_input(
+            "Yards to hole", 0, 400, 150, step=1
+        )
+    }
+
+    st.button("Next", use_container_width=True, on_click=lambda: go("shot_result"))
+
+
+# =========================
+# SHOT DIRECTION (MISSES)
 # =========================
 elif st.session_state.page == "shot_direction":
-    st.caption(progress_text())
+    st.caption(progress())
     st.subheader("Which direction?")
 
     cols = st.columns(2)
@@ -139,20 +149,23 @@ elif st.session_state.page == "shot_direction":
         def handler(direction=d):
             st.session_state.shot["direction"] = direction.lower()
             save_shot()
-            go("shot_distance")
+            go("approach_distance")
 
         cols[i % 2].button(d, use_container_width=True, on_click=handler)
 
 
 # =========================
-# PUTTING DISTANCE (ON GREEN)
+# PUTTING DISTANCE
 # =========================
 elif st.session_state.page == "putt_distance":
-    st.caption(progress_text())
+    st.caption(progress())
     st.subheader("Putting")
 
     st.session_state.shot = {
-        "putt_distance": st.number_input("Feet from hole", 0, 100, 15, step=1)
+        "shot_number": shot_number(),
+        "putt_distance": st.number_input(
+            "Feet from hole", 0, 100, 15, step=1
+        )
     }
 
     st.button("Next", use_container_width=True, on_click=lambda: go("putt_result"))
@@ -162,7 +175,7 @@ elif st.session_state.page == "putt_distance":
 # PUTT RESULT
 # =========================
 elif st.session_state.page == "putt_result":
-    st.caption(progress_text())
+    st.caption(progress())
     st.subheader("Where did the putt go?")
 
     cols = st.columns(2)
