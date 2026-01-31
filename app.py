@@ -91,7 +91,10 @@ def expected_strokes(distance_yards=None, putt_feet=None, handicap=0):
 if st.session_state.page == "round":
     st.title("Golf Stat Tracker")
 
-    st.session_state.round["date"] = st.date_input("Round Date", value=date.today())
+    st.session_state.round["date"] = st.date_input(
+        "Round Date",
+        value=date.today()
+    )
     st.session_state.round["player"] = st.text_input("Player Name")
     st.session_state.round["course"] = st.text_input("Course Name")
     st.session_state.round["holes_played"] = st.number_input("Holes Played", 1, 18, 18)
@@ -107,9 +110,12 @@ elif st.session_state.page == "hole_setup":
     st.subheader(f"Hole {st.session_state.hole_index} Setup")
 
     p1, p2, p3 = st.columns(3)
-    if p1.button("Par 3"): st.session_state.temp_par, st.session_state.temp_yardage = 3, 170
-    if p2.button("Par 4"): st.session_state.temp_par, st.session_state.temp_yardage = 4, 400
-    if p3.button("Par 5"): st.session_state.temp_par, st.session_state.temp_yardage = 5, 520
+    if p1.button("Par 3"):
+        st.session_state.temp_par, st.session_state.temp_yardage = 3, 170
+    if p2.button("Par 4"):
+        st.session_state.temp_par, st.session_state.temp_yardage = 4, 400
+    if p3.button("Par 5"):
+        st.session_state.temp_par, st.session_state.temp_yardage = 5, 520
 
     if st.session_state.temp_par:
         st.session_state.temp_yardage = st.number_input(
@@ -189,8 +195,6 @@ elif st.session_state.page == "shot_result":
                   st.session_state.update({"shot": {"shot_number": shot_number(), "result": "out_of_bounds"}}),
                   go("shot_direction")
               ))
-
-    st.button("⬅ Back", use_container_width=True, on_click=back)
 
 
 # =========================
@@ -280,14 +284,15 @@ elif st.session_state.page == "putt_result":
 elif st.session_state.page == "summary":
     st.title("Round Stats Recap 📊")
 
+    round_date_str = st.session_state.round["date"].strftime("%m/%d/%Y")
+    st.caption(f"{round_date_str} • {st.session_state.round.get('course','')}")
+
     handicap = st.number_input("Strokes Gained Baseline Handicap", -5.0, 20.0, 0.0, step=0.5)
 
     sg = {"OTT": 0, "APP": 0, "SG": 0, "PUTT": 0}
 
     for h in st.session_state.round["holes"]:
-        shots = h["shots"]
-
-        for s in shots:
+        for s in h["shots"]:
             if "putt_distance" in s:
                 before = expected_strokes(putt_feet=s["putt_distance"], handicap=handicap)
                 after = 0 if s.get("result") == "hole" else expected_strokes(putt_feet=3, handicap=handicap)
