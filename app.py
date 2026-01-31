@@ -1,236 +1,243 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
+from copy import deepcopy
 from datetime import date
 
-# =========================
-# SESSION STATE INIT
-# =========================
-if "page" not in st.session_state:
-    st.session_state.page = "round"
-if "round" not in st.session_state:
-    st.session_state.round = {"holes": []}
-if "hole_index" not in st.session_state:
-    st.session_state.hole_index = 1
-if "hole" not in st.session_state:
-    st.session_state.hole = {}
-if "shot" not in st.session_state:
-    st.session_state.shot = {}
-if "temp_par" not in st.session_state:
-    st.session_state.temp_par = None
-if "temp_yardage" not in st.session_state:
-    st.session_state.temp_yardage = None
+# ----------------------------
+# CONFIG
+# ----------------------------
+st.set_page_config(page_title="Golf Round Tracker", layout="centered")
 
-
-# =========================
+# ----------------------------
 # HELPERS
-# =========================
-def go(page):
-    st.session_state.page = page
+# ----------------------------
+def push_undo():
+    st.session_state.undo_stack.append(deepcopy(st.session_state.game))
 
-def shot_number():
-    return len(st.session_state.hole.get("shots", [])) + 1
+def undo():
+    if st.session_state.undo_stack:
+        st.session_state.game = st.session_state.undo_stack.pop()
 
-def progress():
-    return f"Hole {st.session_state.hole_index} of {st.session_state.round['holes_played']} • Shot {shot_number()}"
+def reset_app():
+    for k in list(st.session_state.keys()):
+        del st.session_state[k]
 
-def save_shot():
-    st.session_state.hole["shots"].append(st.session_state.shot)
+# ----------------------------
+# INITIAL STATE
+# ----------------------------
+if "screen" not in st.session_state:
+    st.session_state.screen = "round_setup"
+    st.session_state.game = {
+        "round": {},
+        "holes": [],
+        "current_hole": 0,
+        "stats": {
+            "fairways": [],
+            "gir": [],
+            "scramble": [],
+            "putts": [],
+            "first_putts": [],
+            "prox_gir": [],
+            "prox_missed_gir": []
+        }
+    }
+    st.session_state.undo_stack = []
 
-def finish_hole():
-    st.session_state.round["holes"].append(st.session_state.hole)
-    st.session_state.hole_index += 1
-    if st.session_state.hole_index > st.session_state.round["holes_played"]:
-        go("summary")
-    else:
-        go("hole_setup")
+# ----------------------------
+# UI
+# ----------------------------
+st.title("⛳ Golf Shot Tracker")
 
-
-# =========================
+# ----------------------------
 # ROUND SETUP
-# =========================
-if st.session_state.page == "round":
-    st.title("Golf Stat Tracker")
+# ----------------------------
+if st.session_state.screen == "round_setup":
+    st.subheader("Round Setup")
 
-    st.session_state.round["date"] = st.date_input("Round Date", value=date.today())
-    st.session_state.round["player"] = st.text_input("Player Name")
-    st.session_state.round["course"] = st.text_input("Course Name")
-    st.session_state.round["holes_played"] = st.number_input("Holes Played", 1, 18, 18)
-    st.session_state.round["holes"] = []
+    round_date = st.date_input("Date", value=date.today())
+    player = st.text_input("Player Name")
+    course = st.text_input("Course Name")
+    holes = st.radio("Holes", [9, 18])
 
-    if st.button("Start Round", key="start_round", use_container_width=True):
-        go("hole_setup")
+    if st.button("Start Round"):
+        st.session_state.game["round"] = {
+            "date": str(round_date),
+            "player": player,
+            "course": course,
+            "holes": holes
+        }
+        st.session_state.screen = "hole_setup"
 
-
-# =========================
+# ----------------------------
 # HOLE SETUP
-# =========================
-elif st.session_state.page == "hole_setup":
-    st.subheader(f"Hole {st.session_state.hole_index} Setup")
+# ----------------------------
+elif st.session_state.screen == "hole_setup":
+    hole_num = st.session_state.game["current_hole"] + 1
+    st.subheader(f"Hole {hole_num} Setup")
 
-    c1, c2, c3 = st.columns(3)
-    if c1.button("Par 3", key="par3"):
-        st.session_state.temp_par, st.session_state.temp_yardage = 3, 170
-    if c2.button("Par 4", key="par4"):
-        st.session_state.temp_par, st.session_state.temp_yardage = 4, 400
-    if c3.button("Par 5", key="par5"):
-        st.session_state.temp_par, st.session_state.temp_yardage = 5, 520
+    par = st.radio("Par", [3, 4, 5])
+    yardage = st.number_input("Hole Yardage (yards)", min_value=50, max_value=700, step=1)
 
-    if st.session_state.temp_par:
-        st.session_state.temp_yardage = st.number_input(
-            "Hole Yardage (yards)", 50, 800, st.session_state.temp_yardage, step=1
-        )
+    if st.button("Confirm Hole"):
+        st.session_state.game["holes"].append({
+            "par": par,
+            "yardage": yardage,
+            "shots": [],
+            "strokes": 0,
+            "gir_missed": False,
+            "green_reached": False
+        })
+        st.session_state.screen = "shot_result"
 
-        col1, col2 = st.columns(2)
-        if col1.button("⬅ Back", key="hole_back", use_container_width=True):
-            st.session_state.temp_par = None
-            go("round")
-
-        if col2.button("Confirm Hole", key="confirm_hole", use_container_width=True):
-            st.session_state.hole = {
-                "hole_number": st.session_state.hole_index,
-                "par": st.session_state.temp_par,
-                "yardage": st.session_state.temp_yardage,
-                "shots": []
-            }
-            st.session_state.temp_par = None
-            go("shot_result")
-
-
-# =========================
+# ----------------------------
 # SHOT RESULT
-# =========================
-elif st.session_state.page == "shot_result":
-    st.caption(progress())
-    st.subheader("Tap where the ball finished")
+# ----------------------------
+elif st.session_state.screen == "shot_result":
+    hole = st.session_state.game["holes"][-1]
+    shot_num = len(hole["shots"]) + 1
 
-    if st.button("HOLE", key="shot_hole", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "hole"}
-        save_shot()
-        finish_hole()
+    st.subheader(f"Shot {shot_num} – Result")
 
-    if st.button("Green", key="shot_green", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "green"}
-        go("putt_distance")
+    options = [
+        "Left Rough", "Right Rough", "Fairway Bunker",
+        "Greenside Bunker", "Green", "Water", "OB", "Hole"
+    ]
 
-    if st.button("Greenside Bunker", key="shot_gsb", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "greenside_bunker"}
-        save_shot()
-        go("approach_distance")
+    if hole["par"] in [4, 5] and shot_num == 1:
+        options.insert(0, "Fairway")
 
-    if st.button("Fairway", key="shot_fairway", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "fairway"}
-        save_shot()
-        go("approach_distance")
+    result = st.radio("Where did it finish?", options)
 
-    c1, c2 = st.columns(2)
-    if c1.button("Left Rough", key="shot_rough_left", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "rough", "direction": "left"}
-        save_shot()
-        go("approach_distance")
+    if st.button("Confirm Result"):
+        push_undo()
+        hole["strokes"] += 1
 
-    if c2.button("Right Rough", key="shot_rough_right", use_container_width=True):
-        st.session_state.shot = {"shot_number": shot_number(), "result": "rough", "direction": "right"}
-        save_shot()
-        go("approach_distance")
+        if result in ["Water", "OB"]:
+            hole["strokes"] += 1
 
-    if st.button("⬅ Back", key="shot_back", use_container_width=True):
-        go("hole_setup")
+        if result == "Hole":
+            hole["shots"].append({"result": result})
+            st.session_state.screen = "end_hole"
+        elif result == "Green":
+            hole["green_reached"] = True
+            hole["shots"].append({"result": result})
+            st.session_state.screen = "green_distance"
+        else:
+            if shot_num <= hole["par"]:
+                hole["gir_missed"] = True
+            hole["shots"].append({"result": result})
+            st.session_state.screen = "distance_to_hole"
 
+    if st.button("Undo"):
+        undo()
 
-# =========================
-# APPROACH DISTANCE
-# =========================
-elif st.session_state.page == "approach_distance":
-    st.caption(progress())
-    st.subheader(f"Shot {shot_number()} – distance to hole")
+# ----------------------------
+# DISTANCE TO HOLE (YARDS)
+# ----------------------------
+elif st.session_state.screen == "distance_to_hole":
+    st.subheader("Distance to Hole")
 
-    dist = st.number_input("Yards", 0, 400, 150, step=1)
+    dist = st.number_input("Distance (yards)", min_value=1, max_value=600, step=1)
 
-    c1, c2 = st.columns(2)
-    if c1.button("⬅ Back", key="approach_back", use_container_width=True):
-        go("shot_result")
+    if st.button("Confirm Distance"):
+        push_undo()
+        st.session_state.game["holes"][-1]["shots"][-1]["distance"] = dist
+        st.session_state.screen = "shot_result"
 
-    if c2.button("Next", key="approach_next", use_container_width=True):
-        st.session_state.shot["distance_to_hole"] = dist
-        go("shot_result")
+    if st.button("Undo"):
+        undo()
 
+# ----------------------------
+# GREEN DISTANCE (FEET)
+# ----------------------------
+elif st.session_state.screen == "green_distance":
+    st.subheader("Distance to Hole (On Green)")
 
-# =========================
-# PUTTING DISTANCE
-# =========================
-elif st.session_state.page == "putt_distance":
-    st.caption(progress())
-    st.subheader("Putting – distance to hole")
+    feet = st.number_input("Feet to hole", min_value=0, max_value=200, step=1)
 
-    feet = st.number_input("Feet", 0, 100, 15, step=1)
+    if st.button("Confirm"):
+        push_undo()
+        hole = st.session_state.game["holes"][-1]
+        hole["shots"][-1]["feet"] = feet
 
-    c1, c2 = st.columns(2)
-    if c1.button("⬅ Back", key="putt_dist_back", use_container_width=True):
-        go("shot_result")
+        if hole["gir_missed"]:
+            st.session_state.game["stats"]["prox_missed_gir"].append(feet)
+        else:
+            st.session_state.game["stats"]["prox_gir"].append(feet)
+            st.session_state.game["stats"]["first_putts"].append(feet)
 
-    if c2.button("Next", key="putt_dist_next", use_container_width=True):
-        st.session_state.shot["putt_distance"] = feet
-        go("putt_result")
+        st.session_state.screen = "putt"
 
+    if st.button("Undo"):
+        undo()
 
-# =========================
-# PUTT RESULT
-# =========================
-elif st.session_state.page == "putt_result":
-    st.caption(progress())
-    st.subheader("Where did the putt go?")
+# ----------------------------
+# PUTTING
+# ----------------------------
+elif st.session_state.screen == "putt":
+    st.subheader("Putt Result")
 
-    for label in ["Left", "Right", "Short", "Long", "Hole"]:
-        if st.button(label, key=f"putt_{label.lower()}", use_container_width=True):
-            st.session_state.shot["result"] = label.lower()
-            save_shot()
-            if label == "Hole":
-                finish_hole()
-            else:
-                go("putt_distance")
+    result = st.radio("Putt result", ["Left", "Right", "Short", "Long", "Hole"])
 
-    if st.button("⬅ Back", key="putt_back", use_container_width=True):
-        go("putt_distance")
+    if st.button("Confirm Putt"):
+        push_undo()
+        hole = st.session_state.game["holes"][-1]
+        hole["strokes"] += 1
 
+        if result == "Hole":
+            st.session_state.game["stats"]["putts"].append(
+                len([s for s in hole["shots"] if s.get("feet") is not None])
+            )
+            st.session_state.screen = "end_hole"
+        else:
+            st.session_state.screen = "putt"
 
-# =========================
-# SUMMARY + EXPORT
-# =========================
-elif st.session_state.page == "summary":
-    st.title("Round Stats Recap 📊")
+    if st.button("Undo"):
+        undo()
 
-    round_date = st.session_state.round["date"].strftime("%m/%d/%Y")
-    st.caption(f"{round_date} • {st.session_state.round.get('course','')}")
+# ----------------------------
+# END HOLE
+# ----------------------------
+elif st.session_state.screen == "end_hole":
+    hole = st.session_state.game["holes"][-1]
+    score = hole["strokes"] - hole["par"]
 
-    holes = st.session_state.round["holes"]
-    holes_played = len(holes)
+    st.subheader("Hole Complete")
+    st.write(f"Score vs Par: {score:+}")
 
-    rows = []
-    for h in holes:
-        for s in h["shots"]:
-            rows.append({
-                "date": round_date,
-                "hole": h["hole_number"],
-                "par": h["par"],
-                "hole_yardage": h["yardage"],
-                "shot_number": s.get("shot_number"),
-                "result": s.get("result"),
-                "direction": s.get("direction"),
-                "distance_to_hole": s.get("distance_to_hole"),
-                "putt_distance": s.get("putt_distance"),
-            })
+    if hole["par"] in [4, 5]:
+        tee = hole["shots"][0]["result"]
+        st.session_state.game["stats"]["fairways"].append(tee == "Fairway")
 
-    df = pd.DataFrame(rows)
+    gir = not hole["gir_missed"]
+    st.session_state.game["stats"]["gir"].append(gir)
+    st.session_state.game["stats"]["scramble"].append(
+        hole["gir_missed"] and score <= 0
+    )
 
-    st.subheader("Export Round Data")
+    if st.button("Next Hole"):
+        st.session_state.game["current_hole"] += 1
+        if st.session_state.game["current_hole"] < st.session_state.game["round"]["holes"]:
+            st.session_state.screen = "hole_setup"
+        else:
+            st.session_state.screen = "summary"
+
+# ----------------------------
+# SUMMARY
+# ----------------------------
+elif st.session_state.screen == "summary":
+    st.subheader("Round Summary")
+
+    df = pd.DataFrame({
+        "Fairway Hit": st.session_state.game["stats"]["fairways"],
+        "GIR": st.session_state.game["stats"]["gir"],
+        "Scramble": st.session_state.game["stats"]["scramble"]
+    })
+
+    st.dataframe(df)
 
     csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇ Download CSV", csv, "round_data.csv", mime="text/csv", key="export_csv")
+    st.download_button("Download CSV", csv, "round_stats.csv")
 
-    try:
-        excel_buffer = BytesIO()
-        df.to_excel(excel_buffer, index=False)
-        st.download_button("⬇ Download Excel", excel_buffer.getvalue(), "round_data.xlsx", key="export_excel")
-    except Exception:
-        st.info("Excel export unavailable. CSV recommended.")
+    if st.button("Start New Round"):
+        reset_app()
