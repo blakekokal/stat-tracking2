@@ -5,25 +5,22 @@ from datetime import date
 # =========================================================
 # PAGE CONFIG
 # =========================================================
-st.set_page_config(page_title="Golf Tracker", layout="centered")
+st.set_page_config(page_title="Golf Shot Tracker", layout="centered")
 
 # =========================================================
-# GLOBAL STYLES (POLISH)
+# STYLES (BIG BUTTONS, MOBILE SAFE)
 # =========================================================
 st.markdown(
     """
     <style>
-    /* Big primary buttons */
     div.stButton > button {
         width: 100%;
         height: 3.8em;
         font-size: 1.15rem;
-        margin-top: 0.6em;
-        margin-bottom: 0.6em;
-        border-radius: 10px;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+        border-radius: 12px;
     }
-
-    /* Undo button styling */
     .undo-btn button {
         background-color: #f2f2f2;
         color: #333;
@@ -31,23 +28,13 @@ st.markdown(
         height: 3em;
         font-size: 1rem;
     }
-
-    /* Bigger radio tap targets */
-    div[role="radiogroup"] label {
-        font-size: 1.05rem;
-        padding: 0.45em 0;
-    }
-
-    section.main > div {
-        padding-top: 1rem;
-    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 # =========================================================
-# INITIALIZATION
+# INIT STATE
 # =========================================================
 if "screen" not in st.session_state:
     st.session_state.screen = "ROUND_SETUP"
@@ -80,7 +67,7 @@ def goto(screen):
     st.session_state.payload = None
 
 # =========================================================
-# ACTION HANDLER (NO UI)
+# ACTION HANDLER (NO UI HERE)
 # =========================================================
 if st.session_state.action:
 
@@ -204,10 +191,11 @@ elif st.session_state.screen == "HOLE_SETUP":
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------------- SHOT RESULT ----------------
+# ---------------- SHOT RESULT (BUTTON LIES) ----------------
 elif st.session_state.screen == "SHOT_RESULT":
     hole = st.session_state.game["holes"][-1]
     shot_num = len(hole["shots"]) + 1
+
     st.markdown(f"### Shot {shot_num}")
     st.markdown("#### Where did the ball finish?")
 
@@ -230,12 +218,11 @@ elif st.session_state.screen == "SHOT_RESULT":
             "Fairway Bunker", "Water", "OB", "Hole"
         ]
 
-    result = st.radio("", options)
-
-    if st.button("Confirm Shot"):
-        st.session_state.action = "SHOT_RESULT"
-        st.session_state.payload = result
-        st.rerun()
+    for opt in options:
+        if st.button(opt):
+            st.session_state.action = "SHOT_RESULT"
+            st.session_state.payload = opt
+            st.rerun()
 
     st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
     if st.button("Undo"):
@@ -243,7 +230,7 @@ elif st.session_state.screen == "SHOT_RESULT":
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------------- DISTANCE YARDS ----------------
+# ---------------- DISTANCE (YARDS) ----------------
 elif st.session_state.screen == "DISTANCE_YARDS":
     st.markdown("### Distance to Hole")
     yards = st.number_input("Yards", 1, 600, step=1)
@@ -278,12 +265,12 @@ elif st.session_state.screen == "GREEN_DISTANCE":
 # ---------------- PUTTING ----------------
 elif st.session_state.screen == "PUTT":
     st.markdown("### Putting")
-    result = st.radio("Putt result", ["Left", "Right", "Short", "Long", "Hole"])
 
-    if st.button("Confirm Putt"):
-        st.session_state.action = "PUTT"
-        st.session_state.payload = result
-        st.rerun()
+    for opt in ["Left", "Right", "Short", "Long", "Hole"]:
+        if st.button(opt):
+            st.session_state.action = "PUTT"
+            st.session_state.payload = opt
+            st.rerun()
 
     st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
     if st.button("Undo"):
