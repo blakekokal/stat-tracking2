@@ -8,7 +8,7 @@ from datetime import date
 st.set_page_config(page_title="Golf Shot Tracker", layout="centered")
 
 # =========================================================
-# STYLES (BIG BUTTONS, MOBILE SAFE)
+# STYLES
 # =========================================================
 st.markdown(
     """
@@ -16,17 +16,23 @@ st.markdown(
     div.stButton > button {
         width: 100%;
         height: 3.8em;
-        font-size: 1.15rem;
-        margin-top: 0.5em;
-        margin-bottom: 0.5em;
-        border-radius: 12px;
+        font-size: 1.1rem;
+        margin-top: 0.4em;
+        margin-bottom: 0.4em;
+        border-radius: 14px;
+    }
+    .danger button {
+        background-color: #ffecec;
+        border: 1px solid #ff9a9a;
+    }
+    .goal button {
+        background-color: #e8f6ea;
+        border: 1px solid #7ac77a;
     }
     .undo-btn button {
         background-color: #f2f2f2;
-        color: #333;
         border: 1px solid #ccc;
         height: 3em;
-        font-size: 1rem;
     }
     </style>
     """,
@@ -66,8 +72,13 @@ def goto(screen):
     st.session_state.action = None
     st.session_state.payload = None
 
+def fire(action, payload=None):
+    st.session_state.action = action
+    st.session_state.payload = payload
+    st.rerun()
+
 # =========================================================
-# ACTION HANDLER (NO UI HERE)
+# ACTION HANDLER
 # =========================================================
 if st.session_state.action:
 
@@ -120,12 +131,10 @@ if st.session_state.action:
         push_undo()
         hole = st.session_state.game["holes"][-1]
         feet = st.session_state.payload
-
         if hole["gir_missed"]:
             hole["prox_missed_gir"] = feet
         else:
             hole["prox_gir"] = feet
-
         hole["shots"][-1]["feet"] = feet
         goto("PUTT")
 
@@ -164,14 +173,12 @@ if st.session_state.screen == "ROUND_SETUP":
     holes = st.radio("Holes", [9, 18])
 
     if st.button("Start Round"):
-        st.session_state.action = "START_ROUND"
-        st.session_state.payload = {
+        fire("START_ROUND", {
             "date": str(d),
             "player": player,
             "course": course,
             "holes": holes
-        }
-        st.rerun()
+        })
 
 # ---------------- HOLE SETUP ----------------
 elif st.session_state.screen == "HOLE_SETUP":
@@ -181,17 +188,9 @@ elif st.session_state.screen == "HOLE_SETUP":
     yardage = st.number_input("Yardage (yards)", 50, 700, step=1)
 
     if st.button("Confirm Hole"):
-        st.session_state.action = "CONFIRM_HOLE"
-        st.session_state.payload = {"par": par, "yardage": yardage}
-        st.rerun()
+        fire("CONFIRM_HOLE", {"par": par, "yardage": yardage})
 
-    st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
-    if st.button("Undo"):
-        st.session_state.action = "UNDO"
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------------- SHOT RESULT (BUTTON LIES) ----------------
+# ---------------- SHOT RESULT (HOLE SHAPE) ----------------
 elif st.session_state.screen == "SHOT_RESULT":
     hole = st.session_state.game["holes"][-1]
     shot_num = len(hole["shots"]) + 1
@@ -199,102 +198,91 @@ elif st.session_state.screen == "SHOT_RESULT":
     st.markdown(f"### Shot {shot_num}")
     st.markdown("#### Where did the ball finish?")
 
-    if shot_num == 1 and hole["par"] in [4, 5]:
-        options = [
-            "Fairway", "Left Rough", "Right Rough",
-            "Fairway Bunker", "Greenside Bunker",
-            "Green", "Water", "OB", "Hole"
-        ]
-    elif shot_num == 1 and hole["par"] == 3:
-        options = [
-            "Green", "Fairway", "Left Rough", "Right Rough",
-            "Short", "Long", "Greenside Bunker",
-            "Water", "OB", "Hole"
-        ]
-    else:
-        options = [
-            "Green", "Greenside Bunker",
-            "Left Rough", "Right Rough",
-            "Fairway Bunker", "Water", "OB", "Hole"
-        ]
+    # TOP: HOLE
+    st.markdown('<div class="goal">', unsafe_allow_html=True)
+    if st.button("Hole"):
+        fire("SHOT_RESULT", "Hole")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    for opt in options:
-        if st.button(opt):
-            st.session_state.action = "SHOT_RESULT"
-            st.session_state.payload = opt
-            st.rerun()
+    # GREEN
+    st.markdown('<div class="goal">', unsafe_allow_html=True)
+    if st.button("Green"):
+        fire("SHOT_RESULT", "Green")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # FAIRWAY / ROUGH ROW
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("Left Rough"):
+            fire("SHOT_RESULT", "Left Rough")
+    with c2:
+        if st.button("Fairway"):
+            fire("SHOT_RESULT", "Fairway")
+    with c3:
+        if st.button("Right Rough"):
+            fire("SHOT_RESULT", "Right Rough")
+
+    # BUNKERS
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Fairway Bunker"):
+            fire("SHOT_RESULT", "Fairway Bunker")
+    with c2:
+        if st.button("Greenside Bunker"):
+            fire("SHOT_RESULT", "Greenside Bunker")
+
+    # BOTTOM: WATER / OB
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown('<div class="danger">', unsafe_allow_html=True)
+        if st.button("Water"):
+            fire("SHOT_RESULT", "Water")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown('<div class="danger">', unsafe_allow_html=True)
+        if st.button("OB"):
+            fire("SHOT_RESULT", "OB")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
     if st.button("Undo"):
-        st.session_state.action = "UNDO"
-        st.rerun()
+        fire("UNDO")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------------- DISTANCE (YARDS) ----------------
+# ---------------- DISTANCE ----------------
 elif st.session_state.screen == "DISTANCE_YARDS":
-    st.markdown("### Distance to Hole")
+    st.markdown("### Distance to Hole (yards)")
     yards = st.number_input("Yards", 1, 600, step=1)
-
     if st.button("Confirm Distance"):
-        st.session_state.action = "DISTANCE_YARDS"
-        st.session_state.payload = yards
-        st.rerun()
-
-    st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
-    if st.button("Undo"):
-        st.session_state.action = "UNDO"
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+        fire("DISTANCE_YARDS", yards)
 
 # ---------------- GREEN DISTANCE ----------------
 elif st.session_state.screen == "GREEN_DISTANCE":
     st.markdown("### On the Green")
     feet = st.number_input("Feet to Hole", 0, 200, step=1)
-
     if st.button("Confirm Distance"):
-        st.session_state.action = "GREEN_DISTANCE"
-        st.session_state.payload = feet
-        st.rerun()
-
-    st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
-    if st.button("Undo"):
-        st.session_state.action = "UNDO"
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+        fire("GREEN_DISTANCE", feet)
 
 # ---------------- PUTTING ----------------
 elif st.session_state.screen == "PUTT":
     st.markdown("### Putting")
-
     for opt in ["Left", "Right", "Short", "Long", "Hole"]:
         if st.button(opt):
-            st.session_state.action = "PUTT"
-            st.session_state.payload = opt
-            st.rerun()
-
-    st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
-    if st.button("Undo"):
-        st.session_state.action = "UNDO"
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+            fire("PUTT", opt)
 
 # ---------------- END HOLE ----------------
 elif st.session_state.screen == "END_HOLE":
     hole = st.session_state.game["holes"][-1]
     score = hole["strokes"] - hole["par"]
-
     st.markdown("### Hole Complete")
     st.metric("Score vs Par", f"{score:+}")
-
     if st.button("Next Hole"):
-        st.session_state.action = "NEXT_HOLE"
-        st.rerun()
+        fire("NEXT_HOLE")
 
 # ---------------- SUMMARY ----------------
 elif st.session_state.screen == "SUMMARY":
     st.markdown("### Round Complete")
     st.write(st.session_state.game)
-
     if st.button("Restart"):
         st.session_state.clear()
         st.rerun()
