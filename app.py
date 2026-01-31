@@ -63,38 +63,12 @@ def back():
 
 
 # =========================
-# STROKES GAINED BASELINE
-# =========================
-def expected_strokes(distance_yards=None, putt_feet=None, handicap=0):
-    adj = handicap * 0.05
-
-    if putt_feet is not None:
-        return max(0.5, (putt_feet * 0.05) + adj)
-
-    if distance_yards is None:
-        return 0
-
-    if distance_yards > 200:
-        return 3.2 + adj
-    if distance_yards > 150:
-        return 3.0 + adj
-    if distance_yards > 100:
-        return 2.8 + adj
-    if distance_yards > 50:
-        return 2.3 + adj
-    return 1.8 + adj
-
-
-# =========================
 # ROUND SETUP
 # =========================
 if st.session_state.page == "round":
     st.title("Golf Stat Tracker")
 
-    st.session_state.round["date"] = st.date_input(
-        "Round Date",
-        value=date.today()
-    )
+    st.session_state.round["date"] = st.date_input("Round Date", value=date.today())
     st.session_state.round["player"] = st.text_input("Player Name")
     st.session_state.round["course"] = st.text_input("Course Name")
     st.session_state.round["holes_played"] = st.number_input("Holes Played", 1, 18, 18)
@@ -279,7 +253,7 @@ elif st.session_state.page == "putt_result":
 
 
 # =========================
-# SUMMARY + STROKES GAINED
+# SUMMARY + EXPORT
 # =========================
 elif st.session_state.page == "summary":
     st.title("Round Stats Recap 📊")
@@ -287,33 +261,122 @@ elif st.session_state.page == "summary":
     round_date_str = st.session_state.round["date"].strftime("%m/%d/%Y")
     st.caption(f"{round_date_str} • {st.session_state.round.get('course','')}")
 
-    handicap = st.number_input("Strokes Gained Baseline Handicap", -5.0, 20.0, 0.0, step=0.5)
+    holes = st.session_state.round["holes"]
+    holes_played = len(holes)
 
-    sg = {"OTT": 0, "APP": 0, "SG": 0, "PUTT": 0}
-
-    for h in st.session_state.round["holes"]:
+    rows = []
+    for h in holes:
         for s in h["shots"]:
-            if "putt_distance" in s:
-                before = expected_strokes(putt_feet=s["putt_distance"], handicap=handicap)
-                after = 0 if s.get("result") == "hole" else expected_strokes(putt_feet=3, handicap=handicap)
-                sg["PUTT"] += before - (1 + after)
-                continue
+            rows.append({
+                "date": round_date_str,
+                "hole": h["hole_number"],
+                "par": h["par"],
+                "hole_yardage": h["yardage"],
+                "shot_number": s.get("shot_number"),
+                "result": s.get("result"),
+                "direction": s.get("direction"),
+                "distance_to_hole": s.get("distance_to_hole"),
+                "putt_distance": s.get("putt_distance"),
+            })
 
-            dist = s.get("distance_to_hole")
-            before = expected_strokes(distance_yards=dist, handicap=handicap)
-            after = expected_strokes(distance_yards=50, handicap=handicap)
+    df = pd.DataFrame(rows)
 
-            cat = "APP"
-            if s["shot_number"] == 1:
-                cat = "OTT"
-            elif dist is not None and dist <= 100:
-                cat = "SG"
+    # SCORE
+    total_shots = len(df)
+    total_par = sum(h["par"] for h in holes)
+    st.subheader("Score")
+    st.write(f"{total_shots} (Par {total_par}, {total_shots - total_par:+})")
 
-            sg[cat] += before - (1 + after)
+    # FAIRWAYS
+    fw_holes = [h for h in holes if h["par"] in (4, 5)]
+    fw_shots = [h["shots"][0] for h in fw_holes]
+    fw_hit = sum(1 for s in fw_shots if s["result"] == "fairway")
+    fw_left = sum(1 for s in fw_shots if s.get("direction") == "left")
+    fw_right = sum(1 for s in fw_shots if s.get("direction") == "right")
 
-    st.subheader("Strokes Gained")
-    st.write(f"Off the Tee: {sg['OTT']:+.2f}")
-    st.write(f"Approach: {sg['APP']:+.2f}")
-    st.write(f"Short Game: {sg['SG']:+.2f}")
-    st.write(f"Putting: {sg['PUTT']:+.2f}")
-    st.write(f"Total: {sum(sg.values()):+.2f}")
+    st.subheader("Fairways Hit (Par 4 & 5)")
+    st.write(f"{fw_hit} / {len(fw_holes)} ({fw_hit / len(fw_holes) * 100:.1f}%)")
+    st.write(f"Miss Left: {fw_left} • Miss Right: {fw_right}")
+
+    # GREENS IN REGULATION
+    gir = 0
+    miss_dir = {"left": 0, "right": 0, "short": 0, "long": 0}
+    first_putt = []
+    first_putt_gir = []
+    first_putt_miss = []
+
+    for h in holes:
+        putts = [s for s in h["shots"] if s.get("putt_distance") is not None]
+        if not putts:
+            continue
+
+        fp = putts[0]
+        first_putt.append(fp["putt_distance"])
+
+        if fp["shot_number"] <= h["par"] - 1:
+            gir += 1
+            first_putt_gir.append(fp["putt_distance"])
+        else:
+            first_putt_miss.append(fp["putt_distance"])
+            prev = h["shots"][fp["shot_number"] - 2]
+            if prev.get("direction") in miss_dir:
+                miss_dir[prev["direction"]] += 1
+
+    st.subheader("Greens in Regulation")
+    st.write(f"{gir} / {holes_played} ({gir / holes_played * 100:.1f}%)")
+    st.write(
+        f"Miss L/R/S/L: "
+        f"{miss_dir['left']} / {miss_dir['right']} / "
+        f"{miss_dir['short']} / {miss_dir['long']}"
+    )
+
+    # SCRAMBLING
+    scramble_opps = holes_played - gir
+    scramble_made = 0
+
+    for h in holes:
+        putts = [s for s in h["shots"] if s.get("putt_distance") is not None]
+        if not putts:
+            continue
+        fp = putts[0]
+        if fp["shot_number"] > h["par"] - 1:
+            if any(s.get("result") == "hole" for s in h["shots"]):
+                scramble_made += 1
+
+    st.subheader("Scrambling")
+    if scramble_opps > 0:
+        st.write(f"{scramble_made} / {scramble_opps} ({scramble_made / scramble_opps * 100:.1f}%)")
+    else:
+        st.write("N/A")
+
+    # PUTTING
+    putts = df[df["putt_distance"].notna()]
+    st.subheader("Putting")
+    st.write(f"Total Putts: {len(putts)}")
+    st.write(f"Putts per Hole: {len(putts) / holes_played:.2f}")
+    if gir > 0:
+        st.write(f"Putts per GIR: {len(putts) / gir:.2f}")
+
+    st.write(f"Average First Putt: {sum(first_putt) / len(first_putt):.1f} ft")
+    if first_putt_gir:
+        st.write(f"Average Proximity (GIR): {sum(first_putt_gir) / len(first_putt_gir):.1f} ft")
+    if first_putt_miss:
+        st.write(f"Average Proximity (Missed Green): {sum(first_putt_miss) / len(first_putt_miss):.1f} ft")
+
+    # EXPORT
+    st.subheader("Export Round Data")
+
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇ Download CSV (Google Sheets)", csv, "round_data.csv", mime="text/csv")
+
+    try:
+        excel_buffer = BytesIO()
+        df.to_excel(excel_buffer, index=False)
+        st.download_button(
+            "⬇ Download Excel",
+            excel_buffer.getvalue(),
+            "round_data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception:
+        st.info("Excel export unavailable on this server. Use CSV or enable openpyxl.")
