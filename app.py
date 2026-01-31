@@ -8,29 +8,26 @@ from datetime import date
 st.set_page_config(page_title="Golf Shot Tracker", layout="centered")
 
 # =========================================================
-# CSS — TIGHT, PHONE-FIT
+# CSS — MAX TIGHT (STREAMLIT LIMIT)
 # =========================================================
 st.markdown(
     """
     <style>
-    /* Remove Streamlit vertical gaps */
-    div[data-testid="stVerticalBlock"] > div {
-        gap: 0rem !important;
-    }
-
     section.main > div {
         padding-top: 0.4rem;
     }
 
-    /* Tight buttons */
+    /* Tightest possible Streamlit buttons */
     div.stButton > button {
         width: 100%;
         height: 3.0em;
         font-size: 1.05rem;
-        margin: 0 !important;
+        margin-top: 0.15em;
+        margin-bottom: 0.15em;
         border-radius: 10px;
     }
 
+    /* Color cues */
     .goal button {
         background-color: #e6f4ea;
         border: 1px solid #7ac77a;
@@ -89,7 +86,7 @@ def fire(action, payload=None):
     st.rerun()
 
 # =========================================================
-# ACTION HANDLER
+# ACTION HANDLER (NO UI)
 # =========================================================
 if st.session_state.action:
 
@@ -203,67 +200,61 @@ elif st.session_state.screen == "HOLE_SETUP":
     if st.button("Confirm Hole"):
         fire("CONFIRM_HOLE", {"par": par, "yardage": yardage})
 
-# ---------------- SHOT RESULT (TIGHT HOLE MAP) ----------------
+# ---------------- SHOT RESULT (MAX-TIGHT LAYOUT) ----------------
 elif st.session_state.screen == "SHOT_RESULT":
     st.markdown("### Where did the ball finish?")
 
-    # ROW 1 — HOLE
-    with st.container():
+    # HOLE
+    st.markdown('<div class="goal">', unsafe_allow_html=True)
+    if st.button("HOLE"):
+        fire("SHOT_RESULT", "Hole")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # GREEN + GS BUNK
+    c1, c2 = st.columns(2, gap="small")
+    with c1:
         st.markdown('<div class="goal">', unsafe_allow_html=True)
-        if st.button("HOLE"):
-            fire("SHOT_RESULT", "Hole")
+        if st.button("GREEN"):
+            fire("SHOT_RESULT", "Green")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with c2:
+        if st.button("GS BUNK"):
+            fire("SHOT_RESULT", "Greenside Bunker")
+
+    # LEFT / FAIRWAY / RIGHT
+    c1, c2, c3 = st.columns(3, gap="small")
+    with c1:
+        if st.button("LEFT"):
+            fire("SHOT_RESULT", "Left Rough")
+    with c2:
+        if st.button("FAIRWAY"):
+            fire("SHOT_RESULT", "Fairway")
+    with c3:
+        if st.button("RIGHT"):
+            fire("SHOT_RESULT", "Right Rough")
+
+    # FAIRWAY BUNKER
+    if st.button("FW BUNK"):
+        fire("SHOT_RESULT", "Fairway Bunker")
+
+    # WATER / OB
+    c1, c2 = st.columns(2, gap="small")
+    with c1:
+        st.markdown('<div class="danger">', unsafe_allow_html=True)
+        if st.button("WATER"):
+            fire("SHOT_RESULT", "Water")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown('<div class="danger">', unsafe_allow_html=True)
+        if st.button("OB"):
+            fire("SHOT_RESULT", "OB")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ROW 2 — GREEN + GS BUNK
-    with st.container():
-        c1, c2 = st.columns(2, gap="small")
-        with c1:
-            st.markdown('<div class="goal">', unsafe_allow_html=True)
-            if st.button("GREEN"):
-                fire("SHOT_RESULT", "Green")
-            st.markdown('</div>', unsafe_allow_html=True)
-        with c2:
-            if st.button("GS BUNK"):
-                fire("SHOT_RESULT", "Greenside Bunker")
-
-    # ROW 3 — LEFT / FAIRWAY / RIGHT
-    with st.container():
-        c1, c2, c3 = st.columns(3, gap="small")
-        with c1:
-            if st.button("LEFT"):
-                fire("SHOT_RESULT", "Left Rough")
-        with c2:
-            if st.button("FAIRWAY"):
-                fire("SHOT_RESULT", "Fairway")
-        with c3:
-            if st.button("RIGHT"):
-                fire("SHOT_RESULT", "Right Rough")
-
-    # ROW 4 — FAIRWAY BUNKER
-    with st.container():
-        if st.button("FW BUNK"):
-            fire("SHOT_RESULT", "Fairway Bunker")
-
-    # ROW 5 — WATER / OB
-    with st.container():
-        c1, c2 = st.columns(2, gap="small")
-        with c1:
-            st.markdown('<div class="danger">', unsafe_allow_html=True)
-            if st.button("WATER"):
-                fire("SHOT_RESULT", "Water")
-            st.markdown('</div>', unsafe_allow_html=True)
-        with c2:
-            st.markdown('<div class="danger">', unsafe_allow_html=True)
-            if st.button("OB"):
-                fire("SHOT_RESULT", "OB")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # ROW 6 — UNDO
-    with st.container():
-        st.markdown('<div class="neutral">', unsafe_allow_html=True)
-        if st.button("UNDO"):
-            fire("UNDO")
-        st.markdown('</div>', unsafe_allow_html=True)
+    # UNDO
+    st.markdown('<div class="neutral">', unsafe_allow_html=True)
+    if st.button("UNDO"):
+        fire("UNDO")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------- DISTANCE ----------------
 elif st.session_state.screen == "DISTANCE_YARDS":
